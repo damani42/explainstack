@@ -1,3 +1,5 @@
+"""ExplainStack Multi-Agent Application."""
+
 import os
 import logging
 from typing import Optional
@@ -6,13 +8,9 @@ import chainlit as cl
 import openai
 from dotenv import load_dotenv
 
-from .prompts import (
-    explain_code_prompt,
-    explain_patch_prompt,
-    clean_imports_prompt,
-    suggest_commit_message_prompt
-)
 from .config import get_config
+from .config import AgentConfig, AgentRouter
+from .ui import AgentSelector
 
 # Configuration
 config = get_config()
@@ -42,12 +40,17 @@ def setup_openai():
         logger.error(f"Failed to configure OpenAI API: {e}")
         raise RuntimeError(f"Configuration error: {e}")
 
-# Initialization with error handling
+# Initialize with error handling
 try:
     setup_openai()
 except RuntimeError as e:
     logger.critical(f"Critical configuration error: {e}")
     raise
+
+# Initialize multi-agent system
+agent_config = AgentConfig(config)
+agent_router = AgentRouter(agent_config)
+agent_selector = AgentSelector(agent_router)
 
 def validate_input(user_text: str) -> tuple[bool, Optional[str]]:
     """Validate user input."""
@@ -65,68 +68,37 @@ def validate_input(user_text: str) -> tuple[bool, Optional[str]]:
     
     return True, None
 
-def detect_intent(user_text: str) -> str:
-    """Detect user intent with error handling."""
-    try:
-        text = user_text.lower()
-        if text.startswith("diff ") or "---" in text:
-            return "patch"
-        if "nettoie" in text or "clean imports" in text:
-            return "clean_imports"
-        if any(keyword in text for keyword in ["commit message", "commit msg", "suggest commit", "git commit", "commit suggestion"]):
-            return "commit_message"
-        return "code"
-    except Exception as e:
-        logger.error(f"Error detecting intent: {e}")
-        return "code"  # Default fallback
+@cl.on_chat_start
+async def start():
+    """Initialize the chat session."""
+    welcome_message = """🤖 **Welcome to ExplainStack Multi-Agent System!**
 
-async def call_openai_api(prompt: str) -> tuple[bool, Optional[str], Optional[str]]:
-    """Call OpenAI API with comprehensive error handling."""
-    try:
-        logger.info("Calling OpenAI API...")
-        openai_config = config["openai"]
-        response = openai.ChatCompletion.create(
-            model=openai_config["model"],
-            messages=[
-                {"role": "system", "content": "You are an OpenStack expert who explains Python code clearly and professionally."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=openai_config["temperature"],
-            max_tokens=openai_config["max_tokens"],
-        )
-        
-        explanation = response.choices[0].message["content"]
-        logger.info("OpenAI API call successful")
-        return True, explanation, None
-        
-    except openai.error.RateLimitError as e:
-        error_msg = "Rate limit exceeded. Please try again in a few minutes."
-        logger.warning(f"Rate limit error: {e}")
-        return False, None, error_msg
-        
-    except openai.error.InvalidRequestError as e:
-        error_msg = "Invalid request. Please check your code or patch."
-        logger.warning(f"Invalid request error: {e}")
-        return False, None, error_msg
-        
-    except openai.error.AuthenticationError as e:
-        error_msg = "Authentication error. Please check your OpenAI API key."
-        logger.error(f"Authentication error: {e}")
-        return False, None, error_msg
-        
-    except openai.error.APIConnectionError as e:
-        error_msg = "API connection error. Please check your internet connection."
-        logger.error(f"API connection error: {e}")
-        return False, None, error_msg
-        
-    except Exception as e:
-        error_msg = f"Unexpected error: {str(e)}"
-        logger.error(f"Unexpected error: {e}")
-        return False, None, error_msg
+I'm your AI assistant specialized in OpenStack development. I have multiple expert agents ready to help you:
+
+**Available Agents:**
+- 🧠 **Code Expert**: Explains Python code and OpenStack patterns
+- 🔍 **Patch Reviewer**: Reviews Gerrit patches and suggests improvements  
+- 🧹 **Import Cleaner**: Organizes imports according to OpenStack standards
+- 💬 **Commit Writer**: Generates professional commit messages
+
+**How to use:**
+1. Send your code, patch, or question
+2. I'll automatically suggest the best agent
+3. Or specify an agent by typing its name
+
+**Quick Start:**
+- Send Python code → Code Expert
+- Send a diff/patch → Patch Reviewer  
+- Type "clean imports" + code → Import Cleaner
+- Type "commit message" + diff → Commit Writer
+
+Ready to help! What would you like to work on?"""
+    
+    await cl.Message(content=welcome_message).send()
 
 @cl.on_message
 async def main(message: cl.Message):
-    """Main function with comprehensive error handling."""
+    """Main function with multi-agent system."""
     try:
         user_text = message.content
         logger.info(f"Received message: {user_text[:100]}...")
@@ -137,30 +109,30 @@ async def main(message: cl.Message):
             await cl.Message(content=f"❌ Error: {validation_error}").send()
             return
         
-        # Intent detection
-        intent = detect_intent(user_text)
-        logger.info(f"Detected intent: {intent}")
+        # Check for agent selection commands
+        selected_agent_id = agent_selector.parse_agent_selection(user_text)
         
-        # Generate appropriate prompt
-        try:
-            if intent == "patch":
-                prompt = explain_patch_prompt(user_text)
-            elif intent == "clean_imports":
-                prompt = clean_imports_prompt(user_text)
-            elif intent == "commit_message":
-                prompt = suggest_commit_message_prompt(user_text)
-            else:
-                prompt = explain_code_prompt(user_text)
-        except Exception as e:
-            logger.error(f"Error generating prompt: {e}")
-            await cl.Message(content="❌ Error generating prompt. Please try again.").send()
-            return
+        if selected_agent_id is None:
+            # User cancelled or invalid selection
+            if user_text.lower().strip() in ["cancel", "c"]:
+                await cl.Message(content="❌ Operation cancelled.").send()
+                return
+            # Continue with normal processing
         
-        # Call OpenAI API
-        success, explanation, error_msg = await call_openai_api(prompt)
+        # Route to appropriate agent
+        success, response, error_msg = await agent_router.route_request(
+            user_text, 
+            selected_agent_id
+        )
         
-        if success and explanation:
-            await cl.Message(content=explanation).send()
+        if success and response:
+            # Add agent info to response
+            if selected_agent_id:
+                agent_info = agent_router.get_available_agents().get(selected_agent_id)
+                if agent_info:
+                    response = f"🤖 **{agent_info['name']}**\n\n{response}"
+            
+            await cl.Message(content=response).send()
             logger.info("Response sent successfully")
         else:
             error_content = f"❌ {error_msg}"
@@ -170,3 +142,9 @@ async def main(message: cl.Message):
     except Exception as e:
         logger.critical(f"Unexpected error in main: {e}")
         await cl.Message(content="❌ An unexpected error occurred. Please try again.").send()
+
+@cl.on_settings_update
+async def setup_agent_selection(settings):
+    """Handle agent selection settings."""
+    logger.info(f"Settings updated: {settings}")
+    # This can be used for future agent configuration

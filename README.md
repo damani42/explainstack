@@ -6,11 +6,20 @@ ExplainStack is a developer tool powered by GPT-4. It provides natural language 
 
 ## ✨ Features
 
+### 🤖 Multi-Agent System
+- **🧠 Code Expert**: Specialized in explaining Python code and OpenStack patterns
+- **🔍 Patch Reviewer**: Expert in reviewing Gerrit patches and code changes
+- **🧹 Import Cleaner**: Specialized in organizing imports according to OpenStack standards
+- **💬 Commit Writer**: Expert in generating professional commit messages
+- **🎯 Auto-Selection**: Automatically suggests the best agent for your request
+- **🔄 Agent Switching**: Easy switching between agents during conversation
+
+### 🛠️ Core Capabilities
 - 📝 **Code explanation**: Understand what a Python snippet does, line by line.
 - 🔍 **Patch analysis**: Get a pre-review of a Gerrit-style diff.
 - 🧹 **Clean imports**: Reorder and simplify imports based on OpenStack's standards.
 - 💬 **Commit message suggestions**: Generate professional commit messages for your changes.
-- 🧠 **Intent detection**: Automatically figures out what you want (code, patch, cleanup, or commit message).
+- 🧠 **Smart routing**: Automatically figures out what you want and routes to the right agent.
 - 🛡️ **Robust error handling**: Comprehensive error management with user-friendly messages.
 - 📊 **Logging**: Detailed logging for debugging and monitoring.
 - ⚙️ **Configurable**: Customizable via environment variables.
@@ -75,13 +84,28 @@ The Chainlit interface will launch in your browser.
 
 ## 📖 Usage Examples
 
-### Code Explanation
+### 🤖 Multi-Agent System Usage
+
+**Automatic Agent Selection:**
+- Send any code → **Code Expert** agent
+- Send a diff/patch → **Patch Reviewer** agent  
+- Type "clean imports" + code → **Import Cleaner** agent
+- Type "commit message" + diff → **Commit Writer** agent
+
+**Manual Agent Selection:**
+- Type `1` for Code Expert
+- Type `2` for Patch Reviewer
+- Type `3` for Import Cleaner  
+- Type `4` for Commit Writer
+- Type `auto` for automatic selection
+
+### Code Explanation (Code Expert Agent)
 ```
 def calculate_volume(radius, height):
     return 3.14159 * radius ** 2 * height
 ```
 
-### Patch Analysis
+### Patch Analysis (Patch Reviewer Agent)
 ```
 diff --git a/nova/compute/manager.py b/nova/compute/manager.py
 index 1234567..abcdefg 100644
@@ -94,7 +118,7 @@ index 1234567..abcdefg 100644
 +        self.metrics = {}
 ```
 
-### Clean Imports
+### Clean Imports (Import Cleaner Agent)
 ```
 clean imports
 import os
@@ -103,7 +127,7 @@ from nova import config
 import nova.compute.manager
 ```
 
-### Commit Message Suggestion
+### Commit Message Suggestion (Commit Writer Agent)
 ```
 commit message
 diff --git a/nova/api/controllers/volumes.py b/nova/api/controllers/volumes.py
@@ -136,11 +160,16 @@ explainstack/
 
 ## 📌 TODO
 
+- [x] Multi-agent system with specialized agents
+- [x] Automatic agent selection and routing
+- [x] Agent selection UI with Chainlit
 - [x] Detect user intent (code / diff / cleanup / commit message)
 - [x] Clean and restructure imports with HACKING rules
 - [x] Suggest commit messages for patches
 - [ ] Support `.py` or `.diff` file uploads
 - [ ] Add Gerrit integration via API or URL parsing
+- [ ] Add Security Expert agent for vulnerability analysis
+- [ ] Add Performance Expert agent for optimization suggestions
 
 ## 💡 Future Ideas
 

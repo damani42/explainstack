@@ -1,5 +1,11 @@
 - [x] Add intent detection
 - [x] Add clean_imports_prompt
 - [x] Add commit message suggestion
+- [x] Add multi-agent system architecture
+- [x] Add specialized agents (Code Expert, Patch Reviewer, Import Cleaner, Commit Writer)
+- [x] Add agent selection UI
+- [x] Add automatic agent routing
 - [ ] Add support for file uploads
 - [ ] Add optional login system to load user-specific OpenAI API key
+- [ ] Add Security Expert agent
+- [ ] Add Performance Expert agent
