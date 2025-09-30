@@ -87,6 +87,29 @@ LOG_LEVEL=INFO                        # Log level (default: INFO)
 - **Import Cleaner**: OpenAI GPT-3.5-turbo (cost-effective for simple tasks)
 - **Commit Writer**: OpenAI GPT-4 (best for professional writing)
 
+### 🔑 Personal API Key Configuration
+
+For authenticated users, you can configure your own API keys to avoid rate limits and use your own billing:
+
+**Benefits of Personal API Keys:**
+- 🚀 No rate limits from shared keys
+- 💰 Use your own billing and quotas
+- 🔒 Enhanced security and privacy
+- ⚙️ Custom model configurations
+
+**Getting API Keys:**
+- **OpenAI**: https://platform.openai.com/api-keys
+- **Claude**: https://console.anthropic.com/
+- **Gemini**: https://makersuite.google.com/app/apikey
+
+**Configuration Commands:**
+- `api` - Access API key configuration interface
+- `set openai <key>` - Set OpenAI API key
+- `set claude <key>` - Set Claude API key  
+- `set gemini <key>` - Set Gemini API key
+- `test keys` - Test all configured keys
+- `clear keys` - Remove all API keys
+
 ### 🔐 Optional Authentication System
 
 ExplainStack supports both anonymous and authenticated usage:
@@ -106,7 +129,16 @@ ExplainStack supports both anonymous and authenticated usage:
 - Type `login` to sign in
 - Type `register` to create an account
 - Type `profile` to view your settings
+- Type `api` to configure your API keys
 - Type `logout` to sign out
+
+**API Key Configuration:**
+- Type `api` to access API key configuration
+- Type `set openai <your-key>` to set OpenAI API key
+- Type `set claude <your-key>` to set Claude API key
+- Type `set gemini <your-key>` to set Gemini API key
+- Type `test keys` to test all configured keys
+- Type `clear keys` to remove all API keys
 
 ### 3. Run the app
 

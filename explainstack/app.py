@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 
 from .config import get_config
 from .config import AgentConfig, AgentRouter
-from .ui import AgentSelector
+from .ui import AgentSelector, APIConfigUI
 from .database import DatabaseManager
 from .auth import AuthService, AuthMiddleware
 from .user import UserService, UserPreferencesManager
@@ -61,6 +61,7 @@ preferences_manager = UserPreferencesManager(auth_service)
 agent_config = AgentConfig(config)
 agent_router = AgentRouter(agent_config)
 agent_selector = AgentSelector(agent_router)
+api_config_ui = APIConfigUI(auth_service, user_service)
 
 def validate_input(user_text: str) -> tuple[bool, Optional[str]]:
     """Validate user input."""
@@ -105,6 +106,7 @@ I'm your AI assistant specialized in OpenStack development. You're logged in wit
 
 **Quick Commands:**
 - Type `profile` to view your settings
+- Type `api` to configure your API keys
 - Type `logout` to sign out
 - Send your code/patch for analysis
 
@@ -130,8 +132,8 @@ I'm your AI assistant specialized in OpenStack development. You can use me with 
 **Account Features:**
 - Type `login` to sign in with your account
 - Type `register` to create a new account
-- Personal API keys and preferences
-- Session history and analytics
+- Type `api` to configure personal API keys
+- Personal preferences and session history
 
 Ready to help! What would you like to work on?"""
     
@@ -163,10 +165,19 @@ async def main(message: cl.Message):
         elif user_text.lower().strip() in ["profile", "settings"]:
             await handle_profile()
             return
+        elif user_text.lower().strip() in ["api", "keys", "config"]:
+            await handle_api_config()
+            return
         
         # Get current user and configuration
         session_id = cl.user_session.get("session_id")
         current_user = auth_middleware.get_current_user(session_id)
+        
+        # Check for API configuration commands (only for authenticated users)
+        if current_user and user_text.lower().startswith(("set ", "test ", "clear ")):
+            handled = await api_config_ui.handle_api_command(current_user, user_text)
+            if handled:
+                return
         
         # Use user-specific configuration if authenticated
         if current_user:
@@ -271,12 +282,23 @@ async def handle_profile():
 
 **Quick Actions:**
 - Type `settings` to update your preferences
+- Type `api` to configure API keys
 - Type `logout` to sign out
 - Type `help` for more commands"""
         
         await cl.Message(content=profile_text).send()
     else:
         await cl.Message(content="ℹ️ You're not logged in. Type `login` to sign in or `register` to create an account.").send()
+
+async def handle_api_config():
+    """Handle API key configuration."""
+    session_id = cl.user_session.get("session_id")
+    current_user = auth_middleware.get_current_user(session_id)
+    
+    if current_user:
+        await api_config_ui.show_api_configuration(current_user)
+    else:
+        await cl.Message(content="ℹ️ You need to be logged in to configure API keys. Type `login` to sign in or `register` to create an account.").send()
 
 @cl.on_settings_update
 async def setup_agent_selection(settings):
