@@ -5,7 +5,11 @@
 - [x] Add specialized agents (Code Expert, Patch Reviewer, Import Cleaner, Commit Writer)
 - [x] Add agent selection UI
 - [x] Add automatic agent routing
+- [x] Add multi-backend support (OpenAI, Claude, Gemini)
+- [x] Add optional authentication system with SQLite
+- [x] Add user preferences and personal configurations
 - [ ] Add support for file uploads
-- [ ] Add optional login system to load user-specific OpenAI API key
+- [ ] Add OAuth integration (Google, GitHub)
 - [ ] Add Security Expert agent
 - [ ] Add Performance Expert agent
+- [ ] Add user analytics and usage tracking

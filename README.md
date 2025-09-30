@@ -14,6 +14,7 @@ ExplainStack is a developer tool powered by GPT-4. It provides natural language 
 - **🎯 Auto-Selection**: Automatically suggests the best agent for your request
 - **🔄 Agent Switching**: Easy switching between agents during conversation
 - **🌐 Multi-Backend**: Supports OpenAI, Claude, and Gemini for optimal performance and cost
+- **🔐 Optional Authentication**: Personal accounts with custom configurations and preferences
 
 ### 🛠️ Core Capabilities
 - 📝 **Code explanation**: Understand what a Python snippet does, line by line.
@@ -85,6 +86,27 @@ LOG_LEVEL=INFO                        # Log level (default: INFO)
 - **Patch Reviewer**: Claude Sonnet (excellent for code review)
 - **Import Cleaner**: OpenAI GPT-3.5-turbo (cost-effective for simple tasks)
 - **Commit Writer**: OpenAI GPT-4 (best for professional writing)
+
+### 🔐 Optional Authentication System
+
+ExplainStack supports both anonymous and authenticated usage:
+
+**Anonymous Mode (Default):**
+- Use without creating an account
+- Global configuration via environment variables
+- Perfect for personal development
+
+**Authenticated Mode:**
+- Personal API keys and configuration
+- Custom agent preferences
+- Session history and analytics
+- User-specific themes and settings
+
+**Authentication Commands:**
+- Type `login` to sign in
+- Type `register` to create an account
+- Type `profile` to view your settings
+- Type `logout` to sign out
 
 ### 3. Run the app
 
@@ -175,6 +197,9 @@ explainstack/
 - [x] Multi-agent system with specialized agents
 - [x] Automatic agent selection and routing
 - [x] Agent selection UI with Chainlit
+- [x] Multi-backend support (OpenAI, Claude, Gemini)
+- [x] Optional authentication system with SQLite
+- [x] User preferences and personal configurations
 - [x] Detect user intent (code / diff / cleanup / commit message)
 - [x] Clean and restructure imports with HACKING rules
 - [x] Suggest commit messages for patches
@@ -182,6 +207,8 @@ explainstack/
 - [ ] Add Gerrit integration via API or URL parsing
 - [ ] Add Security Expert agent for vulnerability analysis
 - [ ] Add Performance Expert agent for optimization suggestions
+- [ ] Add OAuth integration (Google, GitHub)
+- [ ] Add user analytics and usage tracking
 
 ## 💡 Future Ideas
 
