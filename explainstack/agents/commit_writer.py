@@ -6,11 +6,11 @@ from .base_agent import BaseAgent
 class CommitWriterAgent(BaseAgent):
     """Agent specialized in writing professional commit messages."""
     
-    def __init__(self, config: dict):
+    def __init__(self, backend):
         super().__init__(
             name="Commit Writer",
             description="Expert in writing professional commit messages for OpenStack projects",
-            config=config
+            backend=backend
         )
     
     def get_system_prompt(self) -> str:

@@ -6,11 +6,11 @@ from .base_agent import BaseAgent
 class PatchReviewerAgent(BaseAgent):
     """Agent specialized in reviewing Gerrit patches."""
     
-    def __init__(self, config: dict):
+    def __init__(self, backend):
         super().__init__(
             name="Patch Reviewer",
             description="Expert in reviewing Gerrit patches and OpenStack code changes",
-            config=config
+            backend=backend
         )
     
     def get_system_prompt(self) -> str:

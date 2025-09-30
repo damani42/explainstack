@@ -6,11 +6,11 @@ from .base_agent import BaseAgent
 class CodeExpertAgent(BaseAgent):
     """Agent specialized in explaining Python code."""
     
-    def __init__(self, config: dict):
+    def __init__(self, backend):
         super().__init__(
             name="Code Expert",
             description="Expert in explaining Python code, especially OpenStack projects",
-            config=config
+            backend=backend
         )
     
     def get_system_prompt(self) -> str:

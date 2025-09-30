@@ -6,11 +6,11 @@ from .base_agent import BaseAgent
 class ImportCleanerAgent(BaseAgent):
     """Agent specialized in cleaning and organizing Python imports."""
     
-    def __init__(self, config: dict):
+    def __init__(self, backend):
         super().__init__(
             name="Import Cleaner",
             description="Expert in organizing Python imports according to OpenStack standards",
-            config=config
+            backend=backend
         )
     
     def get_system_prompt(self) -> str:

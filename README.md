@@ -6,13 +6,14 @@ ExplainStack is a developer tool powered by GPT-4. It provides natural language 
 
 ## ✨ Features
 
-### 🤖 Multi-Agent System
-- **🧠 Code Expert**: Specialized in explaining Python code and OpenStack patterns
-- **🔍 Patch Reviewer**: Expert in reviewing Gerrit patches and code changes
-- **🧹 Import Cleaner**: Specialized in organizing imports according to OpenStack standards
-- **💬 Commit Writer**: Expert in generating professional commit messages
+### 🤖 Multi-Agent System with Multiple AI Backends
+- **🧠 Code Expert**: Specialized in explaining Python code and OpenStack patterns (OpenAI GPT-4)
+- **🔍 Patch Reviewer**: Expert in reviewing Gerrit patches and code changes (Claude Sonnet)
+- **🧹 Import Cleaner**: Specialized in organizing imports according to OpenStack standards (OpenAI GPT-3.5-turbo)
+- **💬 Commit Writer**: Expert in generating professional commit messages (OpenAI GPT-4)
 - **🎯 Auto-Selection**: Automatically suggests the best agent for your request
 - **🔄 Agent Switching**: Easy switching between agents during conversation
+- **🌐 Multi-Backend**: Supports OpenAI, Claude, and Gemini for optimal performance and cost
 
 ### 🛠️ Core Capabilities
 - 📝 **Code explanation**: Understand what a Python snippet does, line by line.
@@ -60,19 +61,30 @@ Then edit `.env` and add your OpenAI API key:
 OPENAI_API_KEY=sk-...
 ```
 
-### Optional Configuration
+### Multi-Backend Configuration
 
-You can customize the behavior by setting these environment variables:
+ExplainStack supports multiple AI providers for optimal performance and cost:
 
 ```env
-# OpenAI Configuration
-OPENAI_MODEL=gpt-4                    # Model to use (default: gpt-4)
-OPENAI_TEMPERATURE=0.3                # Response creativity (default: 0.3)
-OPENAI_MAX_TOKENS=2000                # Max response length (default: 2000)
+# API Keys (at least one required)
+OPENAI_API_KEY=sk-your-openai-api-key-here
+CLAUDE_API_KEY=sk-ant-your-claude-api-key-here
+GEMINI_API_KEY=your-gemini-api-key-here
 
-# Logging
+# Model Configuration by Agent
+OPENAI_MODEL=gpt-4                    # Code Expert & Commit Writer
+CLAUDE_MODEL=claude-3-sonnet-20240229 # Patch Reviewer
+GEMINI_MODEL=gemini-pro               # Optional for any agent
+
+# Global Settings
 LOG_LEVEL=INFO                        # Log level (default: INFO)
 ```
+
+**Backend Assignment:**
+- **Code Expert**: OpenAI GPT-4 (best for code explanation)
+- **Patch Reviewer**: Claude Sonnet (excellent for code review)
+- **Import Cleaner**: OpenAI GPT-3.5-turbo (cost-effective for simple tasks)
+- **Commit Writer**: OpenAI GPT-4 (best for professional writing)
 
 ### 3. Run the app
 

@@ -7,6 +7,7 @@ from ..agents import (
     ImportCleanerAgent,
     CommitWriterAgent
 )
+from ..backends import BackendFactory
 
 
 class AgentConfig:
@@ -23,17 +24,47 @@ class AgentConfig:
         self._initialize_agents()
     
     def _initialize_agents(self):
-        """Initialize all available agents."""
-        # Get OpenAI configuration
-        openai_config = self.config.get("openai", {})
+        """Initialize all available agents with their backends."""
+        # Get backend configurations
+        backends_config = self.config.get("backends", {})
         
-        # Initialize agents
+        # Initialize agents with their specific backends
         self.agents = {
-            "code_expert": CodeExpertAgent(openai_config),
-            "patch_reviewer": PatchReviewerAgent(openai_config),
-            "import_cleaner": ImportCleanerAgent(openai_config),
-            "commit_writer": CommitWriterAgent(openai_config),
+            "code_expert": self._create_agent_with_backend(
+                "code_expert", CodeExpertAgent, backends_config
+            ),
+            "patch_reviewer": self._create_agent_with_backend(
+                "patch_reviewer", PatchReviewerAgent, backends_config
+            ),
+            "import_cleaner": self._create_agent_with_backend(
+                "import_cleaner", ImportCleanerAgent, backends_config
+            ),
+            "commit_writer": self._create_agent_with_backend(
+                "commit_writer", CommitWriterAgent, backends_config
+            ),
         }
+    
+    def _create_agent_with_backend(self, agent_id: str, agent_class, backends_config: Dict[str, Any]):
+        """Create an agent with its configured backend.
+        
+        Args:
+            agent_id: Agent identifier
+            agent_class: Agent class to instantiate
+            backends_config: Backend configurations
+            
+        Returns:
+            Agent instance with configured backend
+        """
+        # Get agent-specific backend configuration
+        agent_backend_config = backends_config.get(agent_id, {})
+        backend_type = agent_backend_config.get("type", "openai")
+        backend_config = agent_backend_config.get("config", {})
+        
+        # Create backend
+        backend = BackendFactory.create_backend(backend_type, backend_config)
+        
+        # Create agent with backend
+        return agent_class(backend)
     
     def get_agent(self, agent_id: str):
         """Get agent by ID.
