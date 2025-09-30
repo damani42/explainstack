@@ -10,6 +10,9 @@ ExplainStack is a developer tool powered by GPT-4. It provides natural language 
 - 🔍 **Patch analysis**: Get a pre-review of a Gerrit-style diff.
 - 🧹 **Clean imports**: Reorder and simplify imports based on OpenStack's standards.
 - 🧠 **Intent detection**: Automatically figures out what you want (code, patch, or cleanup).
+- 🛡️ **Robust error handling**: Comprehensive error management with user-friendly messages.
+- 📊 **Logging**: Detailed logging for debugging and monitoring.
+- ⚙️ **Configurable**: Customizable via environment variables.
 
 ## 🚀 Getting Started
 
@@ -37,8 +40,28 @@ make install
 
 Create a `.env` file and add your OpenAI API key:
 
+```bash
+cp env.example .env
+```
+
+Then edit `.env` and add your OpenAI API key:
+
 ```env
 OPENAI_API_KEY=sk-...
+```
+
+### Optional Configuration
+
+You can customize the behavior by setting these environment variables:
+
+```env
+# OpenAI Configuration
+OPENAI_MODEL=gpt-4                    # Model to use (default: gpt-4)
+OPENAI_TEMPERATURE=0.3                # Response creativity (default: 0.3)
+OPENAI_MAX_TOKENS=2000                # Max response length (default: 2000)
+
+# Logging
+LOG_LEVEL=INFO                        # Log level (default: INFO)
 ```
 
 ### 3. Run the app
