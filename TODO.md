@@ -1,5 +1,5 @@
 - [x] Add intent detection
 - [x] Add clean_imports_prompt
-- [ ] Add commit message suggestion
+- [x] Add commit message suggestion
 - [ ] Add support for file uploads
 - [ ] Add optional login system to load user-specific OpenAI API key

@@ -9,7 +9,8 @@ from dotenv import load_dotenv
 from .prompts import (
     explain_code_prompt,
     explain_patch_prompt,
-    clean_imports_prompt
+    clean_imports_prompt,
+    suggest_commit_message_prompt
 )
 from .config import get_config
 
@@ -72,6 +73,8 @@ def detect_intent(user_text: str) -> str:
             return "patch"
         if "nettoie" in text or "clean imports" in text:
             return "clean_imports"
+        if any(keyword in text for keyword in ["commit message", "commit msg", "suggest commit", "git commit", "commit suggestion"]):
+            return "commit_message"
         return "code"
     except Exception as e:
         logger.error(f"Error detecting intent: {e}")
@@ -144,6 +147,8 @@ async def main(message: cl.Message):
                 prompt = explain_patch_prompt(user_text)
             elif intent == "clean_imports":
                 prompt = clean_imports_prompt(user_text)
+            elif intent == "commit_message":
+                prompt = suggest_commit_message_prompt(user_text)
             else:
                 prompt = explain_code_prompt(user_text)
         except Exception as e:

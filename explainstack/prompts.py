@@ -63,3 +63,34 @@ Here is the code:
 
 Return the cleaned imports section only, followed by a short explanation of what was changed.
 """
+
+def suggest_commit_message_prompt(diff: str) -> str:
+    return f"""
+You are an expert Git commit message writer for OpenStack projects.
+
+You are given a Git diff and need to suggest a professional commit message following these guidelines:
+
+1. **Format**: Use conventional commits format: `type(scope): description`
+   - Types: feat, fix, docs, style, refactor, test, chore
+   - Scope: component or module name (optional)
+   - Description: clear, concise, imperative mood
+
+2. **OpenStack conventions**:
+   - Use present tense ("Add feature" not "Added feature")
+   - Keep first line under 50 characters
+   - Add detailed body if needed (separated by blank line)
+   - Reference bug numbers if applicable: "Fixes: #12345"
+
+3. **Structure your response as**:
+   - **Commit Message**: [The suggested commit message]
+   - **Type**: [feat/fix/docs/style/refactor/test/chore]
+   - **Scope**: [component or module affected]
+   - **Explanation**: [Brief explanation of the changes]
+
+Here is the diff:
+```
+{diff}
+```
+
+Provide a professional commit message that clearly describes what this change does.
+"""
