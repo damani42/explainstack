@@ -33,9 +33,9 @@ logger = logging.getLogger(__name__)
 def setup_openai():
     """Configure OpenAI API with error handling."""
     try:
-if "OPENAI_API_KEY" not in os.environ:
-    load_dotenv()
-
+        if "OPENAI_API_KEY" not in os.environ:
+            load_dotenv()
+        
         api_key = os.getenv("OPENAI_API_KEY", None)
         if not api_key:
             raise ValueError("OPENAI_API_KEY is not set")
@@ -263,7 +263,7 @@ async def main(message: cl.Message):
             await handle_file_upload(message.elements)
             return
         
-    user_text = message.content
+        user_text = message.content
         logger.info(f"Received message: {user_text[:100]}...")
         
         # Check if user has uploaded a file and wants to analyze it
