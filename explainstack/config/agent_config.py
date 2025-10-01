@@ -5,7 +5,8 @@ from ..agents import (
     CodeExpertAgent,
     PatchReviewerAgent, 
     ImportCleanerAgent,
-    CommitWriterAgent
+    CommitWriterAgent,
+    SecurityExpertAgent
 )
 from ..backends import BackendFactory
 
@@ -41,6 +42,9 @@ class AgentConfig:
             ),
             "commit_writer": self._create_agent_with_backend(
                 "commit_writer", CommitWriterAgent, backends_config
+            ),
+            "security_expert": self._create_agent_with_backend(
+                "security_expert", SecurityExpertAgent, backends_config
             ),
         }
     
@@ -113,6 +117,14 @@ class AgentConfig:
             Agent ID for automatic selection
         """
         text = user_input.lower()
+        
+        # Security analysis detection
+        if any(keyword in text for keyword in [
+            "security", "vulnerability", "vuln", "secure", "safe",
+            "attack", "exploit", "cve", "owasp", "compliance",
+            "audit", "penetration", "threat", "risk", "hack"
+        ]):
+            return "security_expert"
         
         # Patch detection
         if text.startswith("diff ") or "---" in text or "+++" in text:

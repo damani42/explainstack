@@ -11,6 +11,7 @@ ExplainStack is a developer tool powered by GPT-4. It provides natural language 
 - **🔍 Patch Reviewer**: Expert in reviewing Gerrit patches and code changes (Claude Sonnet)
 - **🧹 Import Cleaner**: Specialized in organizing imports according to OpenStack standards (OpenAI GPT-3.5-turbo)
 - **💬 Commit Writer**: Expert in generating professional commit messages (OpenAI GPT-4)
+- **🔒 Security Expert**: Analyzes code for vulnerabilities and security issues (Claude Sonnet)
 - **🎯 Auto-Selection**: Automatically suggests the best agent for your request
 - **🔄 Agent Switching**: Easy switching between agents during conversation
 - **🌐 Multi-Backend**: Supports OpenAI, Claude, and Gemini for optimal performance and cost
@@ -21,10 +22,34 @@ ExplainStack is a developer tool powered by GPT-4. It provides natural language 
 - 🔍 **Patch analysis**: Get a pre-review of a Gerrit-style diff.
 - 🧹 **Clean imports**: Reorder and simplify imports based on OpenStack's standards.
 - 💬 **Commit message suggestions**: Generate professional commit messages for your changes.
+- 🔒 **Security analysis**: Detect vulnerabilities and security issues in your code.
 - 🧠 **Smart routing**: Automatically figures out what you want and routes to the right agent.
 - 🛡️ **Robust error handling**: Comprehensive error management with user-friendly messages.
 - 📊 **Logging**: Detailed logging for debugging and monitoring.
 - ⚙️ **Configurable**: Customizable via environment variables.
+
+### 🚀 **New Features (Phase 1 & 2)**
+
+#### 📁 **File Upload Support**
+- **Multiple Formats**: Upload .py, .diff, .patch, .txt, .md files
+- **Automatic Analysis**: Files are automatically processed and analyzed
+- **Batch Processing**: Handle multiple files efficiently
+- **File Validation**: Size limits and format validation
+- **Content Preview**: See file content before analysis
+
+#### 🖥️ **CLI Tool**
+- **Command Line Interface**: Full CLI for developers
+- **Multiple Commands**: `analyze`, `security`, `review`, `clean`, `commit`
+- **Agent Selection**: Choose specific agents via CLI
+- **Output Options**: Save results to files
+- **Easy Installation**: Simple setup with `setup_cli.py`
+
+#### 🔒 **Security Expert Agent**
+- **Vulnerability Detection**: Identifies security issues in OpenStack code
+- **Security Best Practices**: Provides recommendations for secure coding
+- **OpenStack Security**: Specialized knowledge of OpenStack security patterns
+- **Compliance**: Helps with security compliance and standards
+- **Risk Assessment**: Evaluates security risks and provides mitigation strategies
 
 ## 🚀 Getting Started
 
@@ -202,6 +227,59 @@ diff --git a/nova/api/controllers/volumes.py b/nova/api/controllers/volumes.py
 +    return self.volume_api.create(req.context, **body['volume'])
 ```
 
+## 🖥️ **CLI Usage**
+
+### **Installation**
+```bash
+# Install CLI globally (requires sudo)
+sudo python3 setup_cli.py
+
+# Or install to user directory (no sudo required)
+python3 setup_cli.py --user
+```
+
+### **CLI Commands**
+```bash
+# Analyze Python code
+explainstack analyze file.py
+
+# Security analysis
+explainstack security file.py
+
+# Review patch/diff
+explainstack review patch.diff
+
+# Clean imports
+explainstack clean file.py
+
+# Generate commit message
+explainstack commit file.py
+
+# Use specific agent
+explainstack analyze file.py --agent security_expert
+
+# Save output to file
+explainstack analyze file.py --output report.md
+
+# Verbose output
+explainstack analyze file.py --verbose
+```
+
+### **CLI Examples**
+```bash
+# Analyze OpenStack Nova code
+explainstack analyze nova/compute/manager.py
+
+# Security analysis with detailed output
+explainstack security keystone/auth/controllers.py --verbose --output security_report.md
+
+# Review Gerrit patch
+explainstack review my_patch.diff --agent patch_reviewer
+
+# Clean imports and save result
+explainstack clean my_file.py --output cleaned_file.py
+```
+
 ## 🛠 Makefile Commands
 
 | Command      | Description                     |
@@ -235,9 +313,10 @@ explainstack/
 - [x] Detect user intent (code / diff / cleanup / commit message)
 - [x] Clean and restructure imports with HACKING rules
 - [x] Suggest commit messages for patches
-- [ ] Support `.py` or `.diff` file uploads
+- [x] Support `.py` or `.diff` file uploads
+- [x] Add Security Expert agent for vulnerability analysis
+- [x] CLI tool for command-line usage
 - [ ] Add Gerrit integration via API or URL parsing
-- [ ] Add Security Expert agent for vulnerability analysis
 - [ ] Add Performance Expert agent for optimization suggestions
 - [ ] Add OAuth integration (Google, GitHub)
 - [ ] Add user analytics and usage tracking

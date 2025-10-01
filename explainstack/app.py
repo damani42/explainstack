@@ -14,6 +14,7 @@ from .ui import AgentSelector, APIConfigUI
 from .database import DatabaseManager
 from .auth import AuthService, AuthMiddleware
 from .user import UserService, UserPreferencesManager
+from .utils import FileHandler
 
 # Configuration
 config = get_config()
@@ -62,6 +63,7 @@ agent_config = AgentConfig(config)
 agent_router = AgentRouter(agent_config)
 agent_selector = AgentSelector(agent_router)
 api_config_ui = APIConfigUI(auth_service, user_service)
+file_handler = FileHandler()
 
 def validate_input(user_text: str) -> tuple[bool, Optional[str]]:
     """Validate user input."""
@@ -122,12 +124,15 @@ I'm your AI assistant specialized in OpenStack development. You can use me with 
 - 🔍 **Patch Reviewer**: Reviews Gerrit patches and suggests improvements  
 - 🧹 **Import Cleaner**: Organizes imports according to OpenStack standards
 - 💬 **Commit Writer**: Generates professional commit messages
+- 🔒 **Security Expert**: Analyzes code for vulnerabilities and security issues
 
 **Quick Start:**
 - Send Python code → Code Expert
 - Send a diff/patch → Patch Reviewer  
 - Type "clean imports" + code → Import Cleaner
 - Type "commit message" + diff → Commit Writer
+- Type "security" + code → Security Expert
+- 📁 **Upload files** (.py, .diff, .patch) for analysis
 
 **Account Features:**
 - Type `login` to sign in with your account
@@ -139,12 +144,76 @@ Ready to help! What would you like to work on?"""
     
     await cl.Message(content=welcome_message).send()
 
+async def handle_file_upload(elements):
+    """Handle uploaded files."""
+    try:
+        for element in elements:
+            if hasattr(element, 'content') and hasattr(element, 'name'):
+                # Save uploaded file
+                success, file_path, error_msg = file_handler.save_uploaded_file(
+                    element.content, element.name
+                )
+                
+                if not success:
+                    await cl.Message(content=f"❌ Error uploading file: {error_msg}").send()
+                    continue
+                
+                # Process file for analysis
+                success, file_info, error_msg = file_handler.process_file_for_analysis(file_path)
+                if not success:
+                    await cl.Message(content=f"❌ Error processing file: {error_msg}").send()
+                    continue
+                
+                # Display file info
+                file_info_msg = f"""📁 **File Uploaded Successfully!**
+
+**File:** {file_info['filename']}
+**Size:** {file_info['size']} bytes
+**Lines:** {file_info['lines']}
+**Type:** {file_info['extension']}
+
+**Content Preview:**
+```python
+{file_info['content'][:500]}{'...' if len(file_info['content']) > 500 else ''}
+```
+
+**What would you like to do with this file?**
+- Type `explain` to analyze the code
+- Type `security` to check for vulnerabilities  
+- Type `review` to review the code
+- Type `clean imports` to organize imports
+- Type `commit message` to generate a commit message
+
+Or just ask me anything about this code!"""
+                
+                await cl.Message(content=file_info_msg).send()
+                
+                # Store file content in session for further analysis
+                cl.user_session.set("uploaded_file", file_info)
+                logger.info(f"File uploaded and processed: {file_info['filename']}")
+                
+    except Exception as e:
+        logger.error(f"Error handling file upload: {e}")
+        await cl.Message(content="❌ Error processing uploaded file. Please try again.").send()
+
 @cl.on_message
 async def main(message: cl.Message):
     """Main function with multi-agent system and authentication."""
     try:
+        # Handle file uploads
+        if message.elements:
+            await handle_file_upload(message.elements)
+            return
+        
         user_text = message.content
         logger.info(f"Received message: {user_text[:100]}...")
+        
+        # Check if user has uploaded a file and wants to analyze it
+        uploaded_file = cl.user_session.get("uploaded_file")
+        if uploaded_file and user_text.lower().strip() in ["explain", "security", "review", "clean imports", "commit message"]:
+            # Use uploaded file content for analysis
+            user_text = f"{user_text}\n\n```python\n{uploaded_file['content']}\n```"
+            logger.info("Using uploaded file content for analysis")
         
         # Input validation
         is_valid, validation_error = validate_input(user_text)

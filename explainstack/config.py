@@ -33,15 +33,24 @@ DEFAULT_CONFIG: Dict[str, Any] = {
                 "max_tokens": 1000
             }
         },
-        "commit_writer": {
-            "type": "openai",
-            "config": {
-                "api_key": "",
-                "model": "gpt-4",
-                "temperature": 0.3,
-                "max_tokens": 1500
-            }
-        }
+               "commit_writer": {
+                   "type": "openai",
+                   "config": {
+                       "api_key": "",
+                       "model": "gpt-4",
+                       "temperature": 0.3,
+                       "max_tokens": 1500
+                   }
+               },
+               "security_expert": {
+                   "type": "claude",
+                   "config": {
+                       "api_key": "",
+                       "model": "claude-3-sonnet-20240229",
+                       "temperature": 0.1,
+                       "max_tokens": 3000
+                   }
+               }
     },
     "validation": {
         "max_input_length": 10000,

@@ -5,11 +5,13 @@ from .code_expert import CodeExpertAgent
 from .patch_reviewer import PatchReviewerAgent
 from .import_cleaner import ImportCleanerAgent
 from .commit_writer import CommitWriterAgent
+from .security_expert import SecurityExpertAgent
 
 __all__ = [
     'BaseAgent',
     'CodeExpertAgent', 
     'PatchReviewerAgent',
     'ImportCleanerAgent',
-    'CommitWriterAgent'
+    'CommitWriterAgent',
+    'SecurityExpertAgent'
 ]
