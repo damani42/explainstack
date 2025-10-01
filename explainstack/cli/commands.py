@@ -181,3 +181,30 @@ class CommitCommand(BaseCommand):
                 return f"❌ Error: {error}"
         except Exception as e:
             return f"❌ Error: {str(e)}"
+
+
+class PerformanceCommand(BaseCommand):
+    """Command for performance analysis."""
+    
+    def execute(self, args) -> str:
+        """Execute performance analysis."""
+        # Read file
+        success, content, error = self.read_file(args.file)
+        if not success:
+            return f"❌ Error: {error}"
+        
+        # Process with performance expert
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            success, result, error = loop.run_until_complete(
+                self.process_with_agent(content, 'performance_expert')
+            )
+            loop.close()
+            
+            if success:
+                return f"⚡ **Performance Analysis**\n\n{result}"
+            else:
+                return f"❌ Error: {error}"
+        except Exception as e:
+            return f"❌ Error: {str(e)}"

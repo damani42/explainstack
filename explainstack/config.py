@@ -50,6 +50,15 @@ DEFAULT_CONFIG: Dict[str, Any] = {
                        "temperature": 0.1,
                        "max_tokens": 3000
                    }
+               },
+               "performance_expert": {
+                   "type": "openai",
+                   "config": {
+                       "api_key": "",
+                       "model": "gpt-4",
+                       "temperature": 0.2,
+                       "max_tokens": 2500
+                   }
                }
     },
     "validation": {

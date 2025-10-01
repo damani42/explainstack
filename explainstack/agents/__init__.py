@@ -6,6 +6,7 @@ from .patch_reviewer import PatchReviewerAgent
 from .import_cleaner import ImportCleanerAgent
 from .commit_writer import CommitWriterAgent
 from .security_expert import SecurityExpertAgent
+from .performance_expert import PerformanceExpertAgent
 
 __all__ = [
     'BaseAgent',
@@ -13,5 +14,6 @@ __all__ = [
     'PatchReviewerAgent',
     'ImportCleanerAgent',
     'CommitWriterAgent',
-    'SecurityExpertAgent'
+    'SecurityExpertAgent',
+    'PerformanceExpertAgent'
 ]

@@ -59,7 +59,7 @@ Examples:
     parser.add_argument(
         '--agent', '-a',
         type=str,
-        choices=['code_expert', 'patch_reviewer', 'import_cleaner', 'commit_writer', 'security_expert'],
+        choices=['code_expert', 'patch_reviewer', 'import_cleaner', 'commit_writer', 'security_expert', 'performance_expert'],
         help='Specify agent to use'
     )
     
@@ -125,6 +125,17 @@ Examples:
         help='File or diff to generate commit message for'
     )
     
+    # Performance command
+    performance_parser = subparsers.add_parser(
+        'performance',
+        help='Performance analysis and optimization'
+    )
+    performance_parser.add_argument(
+        'file',
+        type=str,
+        help='Python file to analyze for performance issues'
+    )
+    
     return parser
 
 
@@ -149,7 +160,8 @@ def main():
             'security': SecurityCommand(agent_router),
             'review': ReviewCommand(agent_router),
             'clean': CleanCommand(agent_router),
-            'commit': CommitCommand(agent_router)
+            'commit': CommitCommand(agent_router),
+            'performance': PerformanceCommand(agent_router)
         }
         
         # Execute command

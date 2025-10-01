@@ -6,7 +6,8 @@ from ..agents import (
     PatchReviewerAgent, 
     ImportCleanerAgent,
     CommitWriterAgent,
-    SecurityExpertAgent
+    SecurityExpertAgent,
+    PerformanceExpertAgent
 )
 from ..backends import BackendFactory
 
@@ -45,6 +46,9 @@ class AgentConfig:
             ),
             "security_expert": self._create_agent_with_backend(
                 "security_expert", SecurityExpertAgent, backends_config
+            ),
+            "performance_expert": self._create_agent_with_backend(
+                "performance_expert", PerformanceExpertAgent, backends_config
             ),
         }
     
@@ -117,6 +121,14 @@ class AgentConfig:
             Agent ID for automatic selection
         """
         text = user_input.lower()
+        
+        # Performance analysis detection
+        if any(keyword in text for keyword in [
+            "performance", "optimize", "optimization", "speed", "fast",
+            "slow", "bottleneck", "efficient", "scalability", "scalable",
+            "memory", "cpu", "resource", "profiling", "benchmark"
+        ]):
+            return "performance_expert"
         
         # Security analysis detection
         if any(keyword in text for keyword in [

@@ -12,6 +12,7 @@ ExplainStack is a developer tool powered by GPT-4. It provides natural language 
 - **🧹 Import Cleaner**: Specialized in organizing imports according to OpenStack standards (OpenAI GPT-3.5-turbo)
 - **💬 Commit Writer**: Expert in generating professional commit messages (OpenAI GPT-4)
 - **🔒 Security Expert**: Analyzes code for vulnerabilities and security issues (Claude Sonnet)
+- **⚡ Performance Expert**: Optimizes code for better performance and scalability (OpenAI GPT-4)
 - **🎯 Auto-Selection**: Automatically suggests the best agent for your request
 - **🔄 Agent Switching**: Easy switching between agents during conversation
 - **🌐 Multi-Backend**: Supports OpenAI, Claude, and Gemini for optimal performance and cost
@@ -50,6 +51,37 @@ ExplainStack is a developer tool powered by GPT-4. It provides natural language 
 - **OpenStack Security**: Specialized knowledge of OpenStack security patterns
 - **Compliance**: Helps with security compliance and standards
 - **Risk Assessment**: Evaluates security risks and provides mitigation strategies
+
+### 🚀 **Phase 3 Features (Advanced)**
+
+#### ⚡ **Performance Expert Agent**
+- **Performance Analysis**: Identifies bottlenecks and optimization opportunities
+- **Code Optimization**: Provides specific recommendations for better performance
+- **Scalability Assessment**: Evaluates code scalability and resource usage
+- **OpenStack Performance**: Specialized knowledge of OpenStack performance patterns
+- **Profiling Recommendations**: Suggests tools and techniques for performance monitoring
+
+#### 🔗 **Gerrit Integration**
+- **URL Parsing**: Automatically detects and parses Gerrit URLs
+- **Change Analysis**: Fetches and analyzes Gerrit changes
+- **Diff Processing**: Processes Gerrit diffs for analysis
+- **Comment Integration**: Shows existing comments and reviews
+- **Workflow Integration**: Seamless integration with OpenStack development workflow
+
+#### 🔐 **OAuth Integration**
+- **Google OAuth**: Sign in with Google accounts
+- **GitHub OAuth**: Sign in with GitHub accounts
+- **Social Authentication**: Easy authentication for users
+- **Account Linking**: Link social accounts to ExplainStack accounts
+- **Setup Instructions**: Clear setup guides for OAuth providers
+
+#### 📊 **Analytics Dashboard**
+- **Usage Tracking**: Track user interactions and agent usage
+- **Performance Metrics**: Monitor response times and success rates
+- **Cost Analysis**: Track API costs and token usage
+- **User Analytics**: Personal usage statistics and insights
+- **System Metrics**: Overall system performance and health
+- **Export Data**: Export analytics data in JSON/CSV format
 
 ## 🚀 Getting Started
 
@@ -316,10 +348,10 @@ explainstack/
 - [x] Support `.py` or `.diff` file uploads
 - [x] Add Security Expert agent for vulnerability analysis
 - [x] CLI tool for command-line usage
-- [ ] Add Gerrit integration via API or URL parsing
-- [ ] Add Performance Expert agent for optimization suggestions
-- [ ] Add OAuth integration (Google, GitHub)
-- [ ] Add user analytics and usage tracking
+- [x] Add Gerrit integration via API or URL parsing
+- [x] Add Performance Expert agent for optimization suggestions
+- [x] Add OAuth integration (Google, GitHub)
+- [x] Add user analytics and usage tracking
 
 ## 💡 Future Ideas
 

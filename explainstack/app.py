@@ -1,6 +1,7 @@
 """ExplainStack Multi-Agent Application with Optional Authentication."""
 
 import os
+import time
 import logging
 from typing import Optional
 
@@ -15,6 +16,8 @@ from .database import DatabaseManager
 from .auth import AuthService, AuthMiddleware
 from .user import UserService, UserPreferencesManager
 from .utils import FileHandler
+from .integrations import GerritIntegration
+from .analytics import AnalyticsManager
 
 # Configuration
 config = get_config()
@@ -30,9 +33,9 @@ logger = logging.getLogger(__name__)
 def setup_openai():
     """Configure OpenAI API with error handling."""
     try:
-        if "OPENAI_API_KEY" not in os.environ:
-            load_dotenv()
-        
+if "OPENAI_API_KEY" not in os.environ:
+    load_dotenv()
+
         api_key = os.getenv("OPENAI_API_KEY", None)
         if not api_key:
             raise ValueError("OPENAI_API_KEY is not set")
@@ -64,6 +67,8 @@ agent_router = AgentRouter(agent_config)
 agent_selector = AgentSelector(agent_router)
 api_config_ui = APIConfigUI(auth_service, user_service)
 file_handler = FileHandler()
+gerrit_integration = GerritIntegration()
+analytics_manager = AnalyticsManager()
 
 def validate_input(user_text: str) -> tuple[bool, Optional[str]]:
     """Validate user input."""
@@ -125,6 +130,7 @@ I'm your AI assistant specialized in OpenStack development. You can use me with 
 - 🧹 **Import Cleaner**: Organizes imports according to OpenStack standards
 - 💬 **Commit Writer**: Generates professional commit messages
 - 🔒 **Security Expert**: Analyzes code for vulnerabilities and security issues
+- ⚡ **Performance Expert**: Optimizes code for better performance and scalability
 
 **Quick Start:**
 - Send Python code → Code Expert
@@ -132,12 +138,15 @@ I'm your AI assistant specialized in OpenStack development. You can use me with 
 - Type "clean imports" + code → Import Cleaner
 - Type "commit message" + diff → Commit Writer
 - Type "security" + code → Security Expert
+- Type "performance" + code → Performance Expert
 - 📁 **Upload files** (.py, .diff, .patch) for analysis
+- 🔗 **Paste Gerrit URLs** for automatic analysis
 
 **Account Features:**
 - Type `login` to sign in with your account
 - Type `register` to create a new account
 - Type `api` to configure personal API keys
+- Type `analytics` to view usage statistics
 - Personal preferences and session history
 
 Ready to help! What would you like to work on?"""
@@ -196,6 +205,55 @@ Or just ask me anything about this code!"""
         logger.error(f"Error handling file upload: {e}")
         await cl.Message(content="❌ Error processing uploaded file. Please try again.").send()
 
+async def handle_gerrit_url(url: str):
+    """Handle Gerrit URL analysis."""
+    try:
+        # Show loading message
+        await cl.Message(content="🔍 **Analyzing Gerrit URL...**\n\nPlease wait while I fetch the change information.").send()
+        
+        # Analyze Gerrit URL
+        success, analysis_result, error_msg = gerrit_integration.analyze_gerrit_url(url)
+        
+        if not success:
+            await cl.Message(content=f"❌ **Error analyzing Gerrit URL:**\n\n{error_msg}").send()
+            return
+        
+        # Format and display analysis
+        formatted_analysis = gerrit_integration.format_gerrit_analysis(analysis_result)
+        await cl.Message(content=formatted_analysis).send()
+        
+        # Store Gerrit data in session for further analysis
+        cl.user_session.set("gerrit_analysis", analysis_result)
+        logger.info(f"Gerrit URL analyzed successfully: {url}")
+        
+    except Exception as e:
+        logger.error(f"Error handling Gerrit URL {url}: {e}")
+        await cl.Message(content="❌ Error analyzing Gerrit URL. Please try again.").send()
+
+async def handle_analytics():
+    """Handle analytics dashboard request."""
+    try:
+        # Get current user
+        session_id = cl.user_session.get("session_id")
+        current_user = auth_middleware.get_current_user(session_id)
+        
+        if not current_user:
+            await cl.Message(content="❌ **Analytics Dashboard**\n\nPlease log in to view analytics.").send()
+            return
+        
+        # Get analytics data
+        dashboard_data = analytics_manager.get_dashboard_data(current_user.id, hours=24)
+        
+        # Generate analytics report
+        report = analytics_manager.generate_analytics_report(hours=24)
+        
+        await cl.Message(content=report).send()
+        logger.info(f"Analytics dashboard displayed for user {current_user.id}")
+        
+    except Exception as e:
+        logger.error(f"Error handling analytics request: {e}")
+        await cl.Message(content="❌ Error loading analytics. Please try again.").send()
+
 @cl.on_message
 async def main(message: cl.Message):
     """Main function with multi-agent system and authentication."""
@@ -205,7 +263,7 @@ async def main(message: cl.Message):
             await handle_file_upload(message.elements)
             return
         
-        user_text = message.content
+    user_text = message.content
         logger.info(f"Received message: {user_text[:100]}...")
         
         # Check if user has uploaded a file and wants to analyze it
@@ -214,6 +272,20 @@ async def main(message: cl.Message):
             # Use uploaded file content for analysis
             user_text = f"{user_text}\n\n```python\n{uploaded_file['content']}\n```"
             logger.info("Using uploaded file content for analysis")
+        
+        # Check if user has Gerrit analysis and wants to analyze it
+        gerrit_analysis = cl.user_session.get("gerrit_analysis")
+        if gerrit_analysis and user_text.lower().strip() in ["review", "security", "performance", "commit message"]:
+            # Use Gerrit diff content for analysis
+            diff_content = gerrit_analysis.get('diff_content', '')
+            if diff_content:
+                user_text = f"{user_text}\n\n```diff\n{diff_content}\n```"
+                logger.info("Using Gerrit diff content for analysis")
+        
+        # Check if user provided a Gerrit URL
+        if gerrit_integration.is_gerrit_url(user_text.strip()):
+            await handle_gerrit_url(user_text.strip())
+            return
         
         # Input validation
         is_valid, validation_error = validate_input(user_text)
@@ -236,6 +308,9 @@ async def main(message: cl.Message):
             return
         elif user_text.lower().strip() in ["api", "keys", "config"]:
             await handle_api_config()
+            return
+        elif user_text.lower().strip() in ["analytics", "metrics", "stats"]:
+            await handle_analytics()
             return
         
         # Get current user and configuration
@@ -266,9 +341,27 @@ async def main(message: cl.Message):
             # Continue with normal processing
         
         # Route to appropriate agent
+        start_time = time.time()
         success, response, error_msg = await agent_router.route_request(
             user_text, 
             selected_agent_id
+        )
+        response_time = time.time() - start_time
+        
+        # Track analytics
+        session_id = cl.user_session.get("session_id")
+        current_user = auth_middleware.get_current_user(session_id)
+        user_id = current_user.id if current_user else "anonymous"
+        
+        # Track agent usage
+        agent_id = selected_agent_id or agent_router.get_auto_suggestion(user_text)
+        analytics_manager.track_agent_usage(
+            agent_id=agent_id,
+            user_id=user_id,
+            tokens_used=len(user_text) + len(response) if response else 0,
+            cost=0.0,  # TODO: Calculate actual cost
+            response_time=response_time,
+            success=success
         )
         
         if success and response:
