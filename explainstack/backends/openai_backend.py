@@ -26,7 +26,13 @@ class OpenAIBackend(BaseBackend):
     
     def _setup_openai(self):
         """Setup OpenAI API."""
-        openai.api_key = self.config["api_key"]
+        api_key = self.config["api_key"]
+        if api_key == "demo-key" or not api_key:
+            self.logger.warning("OpenAI API key not set - running in demo mode")
+            self.demo_mode = True
+        else:
+            openai.api_key = api_key
+            self.demo_mode = False
         self.logger.info(f"OpenAI backend initialized with model: {self.config['model']}")
     
     async def generate_response(
@@ -46,6 +52,12 @@ class OpenAIBackend(BaseBackend):
             Tuple of (success, response, error_message)
         """
         try:
+            # Check if in demo mode
+            if hasattr(self, 'demo_mode') and self.demo_mode:
+                demo_response = f"[DEMO MODE] This is a simulated response from OpenAI {self.config['model']}. In a real deployment, this would analyze your request: '{user_prompt[:100]}...'"
+                self.logger.info("Returning demo response for OpenAI")
+                return True, demo_response, None
+            
             self.logger.info("Generating response with OpenAI")
             
             # Merge config with kwargs
@@ -68,22 +80,22 @@ class OpenAIBackend(BaseBackend):
             self.logger.info("OpenAI response generated successfully")
             return True, result, None
             
-        except openai.error.RateLimitError as e:
+        except openai.RateLimitError as e:
             error_msg = "OpenAI rate limit exceeded. Please try again in a few minutes."
             self.logger.warning(f"OpenAI rate limit error: {e}")
             return False, None, error_msg
             
-        except openai.error.InvalidRequestError as e:
+        except openai.BadRequestError as e:
             error_msg = "OpenAI invalid request. Please check your input."
             self.logger.warning(f"OpenAI invalid request error: {e}")
             return False, None, error_msg
             
-        except openai.error.AuthenticationError as e:
+        except openai.AuthenticationError as e:
             error_msg = "OpenAI authentication error. Please check your API key."
             self.logger.error(f"OpenAI authentication error: {e}")
             return False, None, error_msg
             
-        except openai.error.APIConnectionError as e:
+        except openai.APIConnectionError as e:
             error_msg = "OpenAI API connection error. Please check your internet connection."
             self.logger.error(f"OpenAI API connection error: {e}")
             return False, None, error_msg

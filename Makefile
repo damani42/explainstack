@@ -8,7 +8,7 @@ install-dev:
 	pip install -r requirements-dev.txt
 
 run:
-	chainlit run explainstack/app.py -w
+	cd /Users/mbollo/explainstack && ./venv/bin/chainlit run explainstack/app.py -w
 
 # Tox commands
 tox:

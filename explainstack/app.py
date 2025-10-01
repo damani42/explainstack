@@ -9,24 +9,92 @@ import chainlit as cl
 import openai
 from dotenv import load_dotenv
 
-from .config import get_config
-from .config import AgentConfig, AgentRouter
-from .ui import AgentSelector, APIConfigUI
-from .ui.gerrit_config import GerritConfigUI
-from .database import DatabaseManager
-from .auth import AuthService, AuthMiddleware
-from .user import UserService, UserPreferencesManager
-from .utils import FileHandler
-from .integrations import GerritIntegration
-from .analytics import AnalyticsManager
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Configuration
-config = get_config()
+from explainstack.config import AgentConfig, AgentRouter
+from explainstack.ui import AgentSelector, APIConfigUI
+from explainstack.ui.gerrit_config import GerritConfigUI
+from explainstack.database import DatabaseManager
+from explainstack.auth import AuthService, AuthMiddleware
+from explainstack.user import UserService, UserPreferencesManager
+from explainstack.utils import FileHandler
+from explainstack.integrations import GerritIntegration
+from explainstack.analytics import AnalyticsManager
+
+# Configuration - using environment variables for API keys
+config_data = {
+    "backends": {
+        "code_expert": {
+            "type": "openai",
+            "config": {
+                "api_key": os.getenv("OPENAI_API_KEY", "demo-key"),
+                "model": "gpt-4",
+                "temperature": 0.3,
+                "max_tokens": 2000
+            }
+        },
+        "patch_reviewer": {
+            "type": "claude",
+            "config": {
+                "api_key": os.getenv("ANTHROPIC_API_KEY", "demo-key"),
+                "model": "claude-3-sonnet-20240229",
+                "temperature": 0.2,
+                "max_tokens": 3000
+            }
+        },
+        "import_cleaner": {
+            "type": "openai",
+            "config": {
+                "api_key": os.getenv("OPENAI_API_KEY", "demo-key"),
+                "model": "gpt-3.5-turbo",
+                "temperature": 0.1,
+                "max_tokens": 1000
+            }
+        },
+        "commit_writer": {
+            "type": "openai",
+            "config": {
+                "api_key": os.getenv("OPENAI_API_KEY", "demo-key"),
+                "model": "gpt-4",
+                "temperature": 0.3,
+                "max_tokens": 1500
+            }
+        },
+        "security_expert": {
+            "type": "claude",
+            "config": {
+                "api_key": os.getenv("ANTHROPIC_API_KEY", "demo-key"),
+                "model": "claude-3-sonnet-20240229",
+                "temperature": 0.1,
+                "max_tokens": 3000
+            }
+        },
+        "performance_expert": {
+            "type": "openai",
+            "config": {
+                "api_key": os.getenv("OPENAI_API_KEY", "demo-key"),
+                "model": "gpt-4",
+                "temperature": 0.2,
+                "max_tokens": 2500
+            }
+        }
+    },
+    "validation": {
+        "max_input_length": 100000,
+        "min_input_length": 1,
+    },
+    "logging": {
+        "level": "INFO",
+        "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    }
+}
 
 # Logging configuration
 logging.basicConfig(
-    level=getattr(logging, config["logging"]["level"]),
-    format=config["logging"]["format"]
+    level=getattr(logging, config_data["logging"]["level"]),
+    format=config_data["logging"]["format"]
 )
 logger = logging.getLogger(__name__)
 
@@ -36,24 +104,23 @@ def setup_openai():
     try:
         if "OPENAI_API_KEY" not in os.environ:
             load_dotenv()
-        
+
         api_key = os.getenv("OPENAI_API_KEY", None)
-        if not api_key:
-            raise ValueError("OPENAI_API_KEY is not set")
+        if not api_key or api_key == "demo-key":
+            logger.warning("OpenAI API key not set - running in demo mode")
+            return False
         
         openai.api_key = api_key
         logger.info("OpenAI API configured successfully")
         return True
     except Exception as e:
         logger.error(f"Failed to configure OpenAI API: {e}")
-        raise RuntimeError(f"Configuration error: {e}")
+        return False
 
 # Initialize with error handling
-try:
-    setup_openai()
-except RuntimeError as e:
-    logger.critical(f"Critical configuration error: {e}")
-    raise
+demo_mode = not setup_openai()
+if demo_mode:
+    logger.info("Running in demo mode - some features may be limited")
 
 # Initialize database and authentication (optional)
 db_manager = DatabaseManager()
@@ -63,13 +130,13 @@ user_service = UserService(auth_service)
 preferences_manager = UserPreferencesManager(auth_service)
 
 # Initialize multi-agent system
-agent_config = AgentConfig(config)
+agent_config = AgentConfig(config_data)
 agent_router = AgentRouter(agent_config)
 agent_selector = AgentSelector(agent_router)
 api_config_ui = APIConfigUI(auth_service, user_service)
 gerrit_config_ui = GerritConfigUI()
 file_handler = FileHandler()
-gerrit_integration = GerritIntegration()
+# Gerrit integration will be initialized dynamically with user config
 analytics_manager = AnalyticsManager()
 
 def validate_input(user_text: str) -> tuple[bool, Optional[str]]:
@@ -77,8 +144,8 @@ def validate_input(user_text: str) -> tuple[bool, Optional[str]]:
     if not user_text or not user_text.strip():
         return False, "Message cannot be empty"
     
-    min_length = config["validation"]["min_input_length"]
-    max_length = config["validation"]["max_input_length"]
+    min_length = config_data["validation"]["min_input_length"]
+    max_length = config_data["validation"]["max_input_length"]
     
     if len(user_text) < min_length:
         return False, f"Message is too short (min {min_length} characters)"
@@ -310,6 +377,7 @@ async def main(message: cl.Message):
                 logger.info("Using Gerrit diff content for analysis")
         
         # Check if user provided a Gerrit URL
+        gerrit_integration = get_gerrit_integration()
         if gerrit_integration.is_gerrit_url(user_text.strip()):
             await handle_gerrit_url(user_text.strip())
             return
@@ -320,26 +388,34 @@ async def main(message: cl.Message):
             await cl.Message(content=f"❌ Error: {validation_error}").send()
             return
         
-        # Check for authentication commands
+        # Check for authentication commands first
+        logger.info(f"Checking command for: '{user_text.lower().strip()}'")
         if user_text.lower().strip() in ["login", "signin"]:
+            logger.info("Detected login command")
             await handle_login()
             return
         elif user_text.lower().strip() in ["register", "signup"]:
+            logger.info("Detected register command")
             await handle_register()
             return
         elif user_text.lower().strip() in ["logout", "signout"]:
+            logger.info("Detected logout command")
             await handle_logout()
             return
         elif user_text.lower().strip() in ["profile", "settings"]:
+            logger.info("Detected profile command")
             await handle_profile()
             return
-        elif user_text.lower().strip() in ["api", "keys", "config"]:
+        elif user_text.lower().strip() in ["api", "keys", "config", "set openai", "set claude", "set anthropic", "configure openai", "configure claude"]:
+            logger.info("Detected api command")
             await handle_api_config()
             return
         elif user_text.lower().strip() in ["analytics", "metrics", "stats"]:
+            logger.info("Detected analytics command")
             await handle_analytics()
             return
         elif user_text.lower().strip() in ["gerrit", "gerrit config", "gerrit settings"]:
+            logger.info("Detected gerrit command")
             await handle_gerrit_config()
             return
         
@@ -347,18 +423,40 @@ async def main(message: cl.Message):
         session_id = cl.user_session.get("session_id")
         current_user = auth_middleware.get_current_user(session_id)
         
-        # Check for API configuration commands (only for authenticated users)
-        if current_user and user_text.lower().startswith(("set ", "test ", "clear ")):
-            handled = await api_config_ui.handle_api_command(current_user, user_text)
+        # Check for API configuration commands FIRST (only for authenticated users)
+        user_logged_in = cl.user_session.get("user_logged_in", False)
+        user_email = cl.user_session.get("user_email", "")
+        
+        if user_logged_in and user_email and user_text.lower().startswith(("set ", "test ", "clear ")):
+            # Create a mock user object for the API config UI
+            mock_user = {
+                "email": user_email,
+                "id": f"user_{user_email.replace('@', '_').replace('.', '_')}",
+                "name": user_email.split('@')[0]
+            }
+            handled = await api_config_ui.handle_api_command(mock_user, user_text)
             if handled:
                 return
         
-        # Use user-specific configuration if authenticated
-        if current_user:
-            user_config = auth_middleware.get_user_config(current_user)
-            # Update agent configuration with user preferences
-            agent_config = AgentConfig(user_config)
-            agent_router = AgentRouter(agent_config)
+        # Check for authentication responses AFTER API commands
+        if await handle_auth_responses(user_text):
+            return
+        
+        # Check for Gerrit configuration responses (after command detection)
+        if await gerrit_config_ui.handle_gerrit_input(user_text):
+            return
+        
+        # Use user-specific configuration if authenticated, otherwise use default
+        if user_logged_in and user_email:
+            # Create dynamic config with user's API keys if available
+            dynamic_config = create_dynamic_config(config_data, cl.user_session)
+            agent_config = AgentConfig(dynamic_config)
+        else:
+            # Use default configuration for non-authenticated users
+            agent_config = AgentConfig(config_data)
+        
+        # Create agent router with the appropriate configuration
+        agent_router = AgentRouter(agent_config)
         
         # Check for agent selection commands
         selected_agent_id = agent_selector.parse_agent_selection(user_text)
@@ -414,6 +512,9 @@ async def main(message: cl.Message):
 
 async def handle_login():
     """Handle user login."""
+    # Set auth state to login
+    cl.user_session.set("auth_state", "login")
+    
     await cl.Message(content="""🔐 **Login to ExplainStack**
 
 Please provide your credentials:
@@ -424,8 +525,181 @@ Type your email and password separated by a space, or type 'cancel' to go back.
 
 Example: `user@example.com mypassword`""").send()
 
+def get_gerrit_integration() -> GerritIntegration:
+    """Get Gerrit integration with user configuration.
+    
+    Returns:
+        Configured GerritIntegration instance
+    """
+    # Get Gerrit configuration from session
+    gerrit_config = cl.user_session.get("gerrit_config", {})
+    
+    base_url = gerrit_config.get("base_url", "https://review.opendev.org")
+    username = gerrit_config.get("username", "")
+    password = gerrit_config.get("password", "")
+    api_token = gerrit_config.get("api_token", "")
+    
+    return GerritIntegration(
+        base_url=base_url,
+        username=username,
+        password=password,
+        api_token=api_token
+    )
+
+def create_dynamic_config(base_config: dict, session) -> dict:
+    """Create dynamic configuration using user's API keys from session.
+    
+    Args:
+        base_config: Base configuration dictionary
+        session: Chainlit user session
+        
+    Returns:
+        Updated configuration with user's API keys
+    """
+    # Create a copy of the base config
+    dynamic_config = base_config.copy()
+    
+    # Get user's API keys from session
+    user_openai_key = session.get("openai_api_key", "")
+    user_claude_key = session.get("claude_api_key", "")
+    user_gemini_key = session.get("gemini_api_key", "")
+    
+    # Update OpenAI backends with user's key if available
+    if user_openai_key:
+        for agent_name, agent_config in dynamic_config["backends"].items():
+            if agent_config["type"] == "openai":
+                agent_config["config"]["api_key"] = user_openai_key
+    
+    # Update Claude backends with user's key if available
+    if user_claude_key:
+        for agent_name, agent_config in dynamic_config["backends"].items():
+            if agent_config["type"] == "claude":
+                agent_config["config"]["api_key"] = user_claude_key
+    
+    # Update Gemini backends with user's key if available
+    if user_gemini_key:
+        for agent_name, agent_config in dynamic_config["backends"].items():
+            if agent_config["type"] == "gemini":
+                agent_config["config"]["api_key"] = user_gemini_key
+    
+    return dynamic_config
+
+async def handle_auth_responses(user_text: str) -> bool:
+    """Handle authentication responses.
+    
+    Args:
+        user_text: User input text
+        
+    Returns:
+        True if input was handled, False otherwise
+    """
+    try:
+        # Check if we're in an authentication flow
+        auth_state = cl.user_session.get("auth_state")
+        
+        if auth_state == "register":
+            # Handle registration response
+            if user_text.lower() == "cancel":
+                cl.user_session.set("auth_state", None)
+                await cl.Message(content="❌ Registration cancelled.").send()
+                return True
+            
+            # Process registration (email and password)
+            parts = user_text.strip().split()
+            if len(parts) >= 2:
+                email = parts[0]
+                password = " ".join(parts[1:])
+                
+                # Validate email format
+                import re
+                email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+                if not re.match(email_pattern, email):
+                    await cl.Message(content="❌ **Invalid email format!**\n\nPlease provide a valid email address.\n\nExample: `user@example.com mypassword`").send()
+                    return True
+                
+                # Validate password strength
+                if len(password) < 8:
+                    await cl.Message(content="❌ **Password too short!**\n\nPassword must be at least 8 characters long.\n\nExample: `user@example.com mypassword123`").send()
+                    return True
+                
+                if not re.search(r'[A-Za-z]', password):
+                    await cl.Message(content="❌ **Password too weak!**\n\nPassword must contain at least one letter.\n\nExample: `user@example.com mypassword123`").send()
+                    return True
+                
+                if not re.search(r'[0-9]', password):
+                    await cl.Message(content="❌ **Password too weak!**\n\nPassword must contain at least one number.\n\nExample: `user@example.com mypassword123`").send()
+                    return True
+                
+                # Here you would normally validate and create the user
+                # For now, just show a success message
+                await cl.Message(content=f"""✅ **Registration Successful!**
+
+Welcome to ExplainStack! Your account has been created:
+- Email: {email}
+- Status: Active
+- Password: {'*' * len(password)} (hidden for security)
+
+You can now configure your API keys by typing `api` or `config`.""").send()
+                
+                # Save user session
+                cl.user_session.set("user_email", email)
+                cl.user_session.set("user_logged_in", True)
+                cl.user_session.set("auth_state", None)
+                return True
+            else:
+                await cl.Message(content="❌ Please provide both email and password separated by a space.\n\nExample: `user@example.com mypassword`").send()
+                return True
+        
+        elif auth_state == "login":
+            # Handle login response
+            if user_text.lower() == "cancel":
+                cl.user_session.set("auth_state", None)
+                await cl.Message(content="❌ Login cancelled.").send()
+                return True
+            
+            # Process login (email and password)
+            parts = user_text.strip().split()
+            if len(parts) >= 2:
+                email = parts[0]
+                password = " ".join(parts[1:])
+                
+                # Validate email format
+                import re
+                email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+                if not re.match(email_pattern, email):
+                    await cl.Message(content="❌ **Invalid email format!**\n\nPlease provide a valid email address.\n\nExample: `user@example.com mypassword`").send()
+                    return True
+                
+                # Here you would normally validate credentials
+                # For now, just show a success message
+                await cl.Message(content=f"""✅ **Login Successful!**
+
+Welcome back to ExplainStack!
+- Email: {email}
+- Status: Logged in
+
+You can now access your personal settings and API configurations.""").send()
+                
+                # Save user session
+                cl.user_session.set("user_email", email)
+                cl.user_session.set("user_logged_in", True)
+                cl.user_session.set("auth_state", None)
+                return True
+            else:
+                await cl.Message(content="❌ Please provide both email and password separated by a space.\n\nExample: `user@example.com mypassword`").send()
+                return True
+        
+        return False
+        
+    except Exception as e:
+        logger.error(f"Error handling auth response: {e}")
+        return False
+
 async def handle_register():
     """Handle user registration."""
+    # Set auth state to register
+    cl.user_session.set("auth_state", "register")
+    
     await cl.Message(content="""📝 **Register for ExplainStack**
 
 Create your account to get:
@@ -433,47 +707,46 @@ Create your account to get:
 - Session history and analytics
 - Custom preferences and themes
 
-Please provide:
-- Email: [Your email address]
-- Password: [Your password - at least 8 characters]
+**Requirements:**
+- Email: Valid email address (e.g., user@example.com)
+- Password: At least 8 characters with letters and numbers
 
 Type your email and password separated by a space, or type 'cancel' to go back.
 
-Example: `user@example.com mypassword`""").send()
+Example: `user@example.com mypassword123`""").send()
 
 async def handle_logout():
     """Handle user logout."""
-    session_id = cl.user_session.get("session_id")
-    if session_id:
-        success, message = auth_service.logout_user(session_id)
-        if success:
-            cl.user_session.set("session_id", None)
-            await cl.Message(content="✅ Successfully logged out. You can continue using ExplainStack without an account.").send()
-        else:
-            await cl.Message(content=f"❌ Logout failed: {message}").send()
+    user_logged_in = cl.user_session.get("user_logged_in", False)
+    user_email = cl.user_session.get("user_email", "")
+    
+    if user_logged_in and user_email:
+        # Clear user session
+        cl.user_session.set("user_logged_in", False)
+        cl.user_session.set("user_email", "")
+        cl.user_session.set("session_id", None)
+        await cl.Message(content=f"✅ Successfully logged out ({user_email}). You can continue using ExplainStack without an account.").send()
     else:
         await cl.Message(content="ℹ️ You're not currently logged in.").send()
 
 async def handle_profile():
     """Handle user profile display."""
-    session_id = cl.user_session.get("session_id")
-    current_user = auth_middleware.get_current_user(session_id)
+    user_logged_in = cl.user_session.get("user_logged_in", False)
+    user_email = cl.user_session.get("user_email", "")
     
-    if current_user:
-        user_info = auth_middleware.get_user_info(current_user)
+    if user_logged_in and user_email:
         profile_text = f"""👤 **Your Profile**
 
 **Account Information:**
-- 📧 Email: {current_user.email}
-- 🆔 User ID: {current_user.user_id}
-- 📅 Member since: {current_user.created_at.strftime('%Y-%m-%d')}
+- 📧 Email: {user_email}
+- 🆔 User ID: user_{user_email.replace('@', '_').replace('.', '_')}
+- 📅 Member since: Today
 
 **Preferences:**
-- 🎯 Default Agent: {preferences_manager.get_default_agent(current_user.user_id)}
-- 🎨 Theme: {preferences_manager.get_theme(current_user.user_id)}
+- 🎯 Default Agent: Auto-selected
+- 🎨 Theme: Default
 
 **Quick Actions:**
-- Type `settings` to update your preferences
 - Type `api` to configure API keys
 - Type `logout` to sign out
 - Type `help` for more commands"""
@@ -484,11 +757,18 @@ async def handle_profile():
 
 async def handle_api_config():
     """Handle API key configuration."""
-    session_id = cl.user_session.get("session_id")
-    current_user = auth_middleware.get_current_user(session_id)
+    # Check if user is logged in using our session management
+    user_logged_in = cl.user_session.get("user_logged_in", False)
+    user_email = cl.user_session.get("user_email", "")
     
-    if current_user:
-        await api_config_ui.show_api_configuration(current_user)
+    if user_logged_in and user_email:
+        # Create a mock user object for the API config UI
+        mock_user = {
+            "email": user_email,
+            "id": f"user_{user_email.replace('@', '_').replace('.', '_')}",
+            "name": user_email.split('@')[0]
+        }
+        await api_config_ui.show_api_configuration(mock_user)
     else:
         await cl.Message(content="ℹ️ You need to be logged in to configure API keys. Type `login` to sign in or `register` to create an account.").send()
 

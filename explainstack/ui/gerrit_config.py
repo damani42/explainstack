@@ -79,6 +79,10 @@ Type the number of the option you want to configure, or type 'back' to return to
     
     async def _configure_base_url(self, current_config: Dict[str, Any]):
         """Configure Gerrit base URL."""
+        # Set pending state for base URL input
+        current_config["_pending"] = "base_url"
+        cl.user_session.set(self.config_key, current_config)
+        
         await cl.Message(content="""🌐 **Configure Gerrit Base URL**
 
 Please enter the Gerrit server URL (e.g., https://review.opendev.org):
@@ -92,6 +96,10 @@ Enter the URL or type 'cancel' to go back.""").send()
     
     async def _configure_username_password(self, current_config: Dict[str, Any]):
         """Configure username and password authentication."""
+        # Set pending state for username input
+        current_config["_pending"] = "username"
+        cl.user_session.set(self.config_key, current_config)
+        
         await cl.Message(content="""🔐 **Configure Username/Password Authentication**
 
 Please enter your Gerrit credentials:
@@ -105,6 +113,10 @@ Enter your username or type 'cancel' to go back.""").send()
     
     async def _configure_api_token(self, current_config: Dict[str, Any]):
         """Configure API token authentication."""
+        # Set pending state for API token input
+        current_config["_pending"] = "api_token"
+        cl.user_session.set(self.config_key, current_config)
+        
         await cl.Message(content="""🔑 **Configure API Token Authentication**
 
 Please enter your Gerrit API token:
@@ -178,6 +190,11 @@ Enter your API token or type 'cancel' to go back.""").send()
                 return True
             elif "api_token" in current_config.get("_pending", ""):
                 await self._handle_api_token_input(input_text, current_config)
+                return True
+            
+            # Check if it's a numeric option selection
+            if input_text.strip() in ["1", "2", "3", "4", "5"]:
+                await self.handle_config_option(input_text.strip())
                 return True
             
             return False

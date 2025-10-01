@@ -131,8 +131,8 @@ class FileHandler:
         try:
             # Read file content
             success, content, error_msg = self.read_file_content(file_path)
-            if not success:
-                return False, None, error_msg
+            if not success or content is None:
+                return False, None, error_msg or "Failed to read file content"
             
             # Get file info
             file_info = {

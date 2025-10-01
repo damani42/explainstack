@@ -29,10 +29,10 @@ class GerritIntegration:
         
         # Configure authentication
         if api_token:
-            # Use API token authentication
-            self.session.headers.update({
-                'Authorization': f'Bearer {api_token}'
-            })
+            # Use API token authentication for Gerrit
+            # For Gerrit, we need to use the token as username with empty password
+            # or use it in the Authorization header
+            self.session.auth = (api_token, '')
         elif username and password:
             # Use basic authentication
             self.session.auth = (username, password)

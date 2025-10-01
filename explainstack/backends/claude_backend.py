@@ -26,7 +26,13 @@ class ClaudeBackend(BaseBackend):
     
     def _setup_claude(self):
         """Setup Claude API."""
-        self.client = anthropic.Anthropic(api_key=self.config["api_key"])
+        api_key = self.config["api_key"]
+        if api_key == "demo-key" or not api_key:
+            self.logger.warning("Claude API key not set - running in demo mode")
+            self.demo_mode = True
+        else:
+            self.client = anthropic.Anthropic(api_key=api_key)
+            self.demo_mode = False
         self.logger.info(f"Claude backend initialized with model: {self.config['model']}")
     
     async def generate_response(
@@ -46,6 +52,12 @@ class ClaudeBackend(BaseBackend):
             Tuple of (success, response, error_message)
         """
         try:
+            # Check if in demo mode
+            if hasattr(self, 'demo_mode') and self.demo_mode:
+                demo_response = f"[DEMO MODE] This is a simulated response from Claude {self.config['model']}. In a real deployment, this would analyze your request: '{user_prompt[:100]}...'"
+                self.logger.info("Returning demo response for Claude")
+                return True, demo_response, None
+            
             self.logger.info("Generating response with Claude")
             
             # Merge config with kwargs
@@ -73,7 +85,7 @@ class ClaudeBackend(BaseBackend):
             self.logger.warning(f"Claude rate limit error: {e}")
             return False, None, error_msg
             
-        except anthropic.InvalidRequestError as e:
+        except anthropic.BadRequestError as e:
             error_msg = "Claude invalid request. Please check your input."
             self.logger.warning(f"Claude invalid request error: {e}")
             return False, None, error_msg

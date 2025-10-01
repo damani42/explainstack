@@ -27,8 +27,12 @@ class APIConfigUI:
         Args:
             user: Current user instance
         """
-        # Get current API keys
-        current_keys = self.user_service.get_user_api_keys(user)
+        # Get current API keys from session
+        current_keys = {
+            "openai_api_key": cl.user_session.get("openai_api_key", ""),
+            "claude_api_key": cl.user_session.get("claude_api_key", ""),
+            "gemini_api_key": cl.user_session.get("gemini_api_key", "")
+        }
         
         config_text = f"""🔑 **API Key Configuration**
 
@@ -114,22 +118,26 @@ Ready to configure your API keys? Type a command above."""
                 await cl.Message(content=f"❌ Invalid {key_type} API key format.").send()
                 return True
             
-            # Prepare API keys dictionary
-            current_keys = self.user_service.get_user_api_keys(user)
-            new_keys = current_keys.copy()
-            new_keys[f"{key_type}_api_key"] = api_key
+            # Get current API keys from session
+            current_keys = {
+                "openai_api_key": cl.user_session.get("openai_api_key", ""),
+                "claude_api_key": cl.user_session.get("claude_api_key", ""),
+                "gemini_api_key": cl.user_session.get("gemini_api_key", "")
+            }
             
-            # Update user API keys
-            success = self.user_service.update_user_api_keys(user, new_keys)
-            
-            if success:
+            # Save API keys to session (simplified approach)
+            try:
+                # Store API keys in session for this demo
+                cl.user_session.set(f"{key_type}_api_key", api_key)
+                cl.user_session.set("api_keys_configured", True)
+                
                 await cl.Message(content=f"✅ {key_type.title()} API key configured successfully!").send()
                 
                 # Test the key if it's new
                 if not current_keys.get(f"{key_type}_api_key"):
                     await self._test_single_key(user, key_type, api_key)
-            else:
-                await cl.Message(content=f"❌ Failed to save {key_type} API key.").send()
+            except Exception as e:
+                await cl.Message(content=f"❌ Failed to save {key_type} API key: {str(e)}").send()
             
             return True
             
@@ -147,7 +155,11 @@ Ready to configure your API keys? Type a command above."""
             True if command was handled
         """
         try:
-            current_keys = self.user_service.get_user_api_keys(user)
+            current_keys = {
+                "openai_api_key": cl.user_session.get("openai_api_key", ""),
+                "claude_api_key": cl.user_session.get("claude_api_key", ""),
+                "gemini_api_key": cl.user_session.get("gemini_api_key", "")
+            }
             
             if not any(current_keys.values()):
                 await cl.Message(content="ℹ️ No API keys configured. Use `set <type> <key>` to configure keys.").send()
@@ -217,19 +229,13 @@ Ready to configure your API keys? Type a command above."""
             True if command was handled
         """
         try:
-            # Clear all API keys
-            empty_keys = {
-                "openai_api_key": "",
-                "claude_api_key": "",
-                "gemini_api_key": ""
-            }
+            # Clear all API keys from session
+            cl.user_session.set("openai_api_key", "")
+            cl.user_session.set("claude_api_key", "")
+            cl.user_session.set("gemini_api_key", "")
+            cl.user_session.set("api_keys_configured", False)
             
-            success = self.user_service.update_user_api_keys(user, empty_keys)
-            
-            if success:
-                await cl.Message(content="✅ All API keys cleared. You'll use global configuration.").send()
-            else:
-                await cl.Message(content="❌ Failed to clear API keys.").send()
+            await cl.Message(content="✅ All API keys cleared. You'll use global configuration.").send()
             
             return True
             

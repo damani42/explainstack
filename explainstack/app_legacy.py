@@ -99,22 +99,22 @@ async def call_openai_api(prompt: str) -> tuple[bool, Optional[str], Optional[st
         logger.info("OpenAI API call successful")
         return True, explanation, None
         
-    except openai.error.RateLimitError as e:
+    except openai.RateLimitError as e:
         error_msg = "Rate limit exceeded. Please try again in a few minutes."
         logger.warning(f"Rate limit error: {e}")
         return False, None, error_msg
         
-    except openai.error.InvalidRequestError as e:
+    except openai.BadRequestError as e:
         error_msg = "Invalid request. Please check your code or patch."
         logger.warning(f"Invalid request error: {e}")
         return False, None, error_msg
         
-    except openai.error.AuthenticationError as e:
+    except openai.AuthenticationError as e:
         error_msg = "Authentication error. Please check your OpenAI API key."
         logger.error(f"Authentication error: {e}")
         return False, None, error_msg
         
-    except openai.error.APIConnectionError as e:
+    except openai.APIConnectionError as e:
         error_msg = "API connection error. Please check your internet connection."
         logger.error(f"API connection error: {e}")
         return False, None, error_msg
