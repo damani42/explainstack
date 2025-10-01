@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from .config import get_config
 from .config import AgentConfig, AgentRouter
 from .ui import AgentSelector, APIConfigUI
+from .ui.gerrit_config import GerritConfigUI
 from .database import DatabaseManager
 from .auth import AuthService, AuthMiddleware
 from .user import UserService, UserPreferencesManager
@@ -66,6 +67,7 @@ agent_config = AgentConfig(config)
 agent_router = AgentRouter(agent_config)
 agent_selector = AgentSelector(agent_router)
 api_config_ui = APIConfigUI(auth_service, user_service)
+gerrit_config_ui = GerritConfigUI()
 file_handler = FileHandler()
 gerrit_integration = GerritIntegration()
 analytics_manager = AnalyticsManager()
@@ -146,6 +148,7 @@ I'm your AI assistant specialized in OpenStack development. You can use me with 
 - Type `login` to sign in with your account
 - Type `register` to create a new account
 - Type `api` to configure personal API keys
+- Type `gerrit` to configure Gerrit authentication
 - Type `analytics` to view usage statistics
 - Personal preferences and session history
 
@@ -211,15 +214,31 @@ async def handle_gerrit_url(url: str):
         # Show loading message
         await cl.Message(content="🔍 **Analyzing Gerrit URL...**\n\nPlease wait while I fetch the change information.").send()
         
+        # Get configured Gerrit integration
+        configured_gerrit = gerrit_config_ui.get_gerrit_integration()
+        
         # Analyze Gerrit URL
-        success, analysis_result, error_msg = gerrit_integration.analyze_gerrit_url(url)
+        success, analysis_result, error_msg = configured_gerrit.analyze_gerrit_url(url)
         
         if not success:
-            await cl.Message(content=f"❌ **Error analyzing Gerrit URL:**\n\n{error_msg}").send()
+            # Check if it's an authentication error
+            if "Authentication required" in error_msg:
+                await cl.Message(content=f"""❌ **Authentication Required**
+
+{error_msg}
+
+**To fix this:**
+1. Type `gerrit` to configure Gerrit authentication
+2. Set up your Gerrit credentials
+3. Try the URL again
+
+**Note**: Some Gerrit changes are public and don't require authentication, but others do.""").send()
+            else:
+                await cl.Message(content=f"❌ **Error analyzing Gerrit URL:**\n\n{error_msg}").send()
             return
         
         # Format and display analysis
-        formatted_analysis = gerrit_integration.format_gerrit_analysis(analysis_result)
+        formatted_analysis = configured_gerrit.format_gerrit_analysis(analysis_result)
         await cl.Message(content=formatted_analysis).send()
         
         # Store Gerrit data in session for further analysis
@@ -253,6 +272,14 @@ async def handle_analytics():
     except Exception as e:
         logger.error(f"Error handling analytics request: {e}")
         await cl.Message(content="❌ Error loading analytics. Please try again.").send()
+
+async def handle_gerrit_config():
+    """Handle Gerrit configuration."""
+    try:
+        await gerrit_config_ui.show_config_ui()
+    except Exception as e:
+        logger.error(f"Error handling Gerrit config: {e}")
+        await cl.Message(content="❌ Error loading Gerrit configuration. Please try again.").send()
 
 @cl.on_message
 async def main(message: cl.Message):
@@ -311,6 +338,9 @@ async def main(message: cl.Message):
             return
         elif user_text.lower().strip() in ["analytics", "metrics", "stats"]:
             await handle_analytics()
+            return
+        elif user_text.lower().strip() in ["gerrit", "gerrit config", "gerrit settings"]:
+            await handle_gerrit_config()
             return
         
         # Get current user and configuration

@@ -1,3 +1,6 @@
 chainlit
 openai
 python-dotenv
+requests
+anthropic
+google-generativeai

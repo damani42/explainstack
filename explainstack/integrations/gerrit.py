@@ -12,21 +12,36 @@ logger = logging.getLogger(__name__)
 class GerritIntegration:
     """Integration with Gerrit code review system."""
     
-    def __init__(self, base_url: Optional[str] = None, username: Optional[str] = None, password: Optional[str] = None):
+    def __init__(self, base_url: Optional[str] = None, username: Optional[str] = None, password: Optional[str] = None, api_token: Optional[str] = None):
         """Initialize Gerrit integration.
         
         Args:
             base_url: Gerrit base URL (e.g., 'https://review.opendev.org')
             username: Gerrit username for authentication
-            password: Gerrit password or API token
+            password: Gerrit password for authentication
+            api_token: Gerrit API token (alternative to username/password)
         """
         self.base_url = base_url or "https://review.opendev.org"
         self.username = username
         self.password = password
+        self.api_token = api_token
         self.session = requests.Session()
         
-        if username and password:
+        # Configure authentication
+        if api_token:
+            # Use API token authentication
+            self.session.headers.update({
+                'Authorization': f'Bearer {api_token}'
+            })
+        elif username and password:
+            # Use basic authentication
             self.session.auth = (username, password)
+        
+        # Set default headers for Gerrit API
+        self.session.headers.update({
+            'Accept': 'application/json',
+            'User-Agent': 'ExplainStack/1.0'
+        })
     
     def parse_gerrit_url(self, url: str) -> Optional[Dict[str, str]]:
         """Parse Gerrit URL to extract change information.
@@ -70,6 +85,36 @@ class GerritIntegration:
             logger.error(f"Error parsing Gerrit URL {url}: {e}")
             return None
     
+    def test_authentication(self) -> Tuple[bool, Optional[str]]:
+        """Test Gerrit authentication.
+        
+        Returns:
+            Tuple of (success, error_message)
+        """
+        try:
+            # Try to access a simple endpoint that requires authentication
+            url = f"{self.base_url}/a/accounts/self"
+            response = self.session.get(url)
+            
+            if response.status_code == 200:
+                return True, None
+            elif response.status_code == 401:
+                return False, "Authentication required but not configured"
+            else:
+                return False, f"HTTP {response.status_code}: {response.text}"
+                
+        except Exception as e:
+            logger.error(f"Error testing authentication: {e}")
+            return False, f"Error: {str(e)}"
+    
+    def is_authenticated(self) -> bool:
+        """Check if Gerrit integration is authenticated.
+        
+        Returns:
+            True if authenticated, False otherwise
+        """
+        return bool(self.username and self.password) or bool(self.api_token)
+    
     def get_change_info(self, change_id: str) -> Tuple[bool, Optional[Dict[str, Any]], Optional[str]]:
         """Get change information from Gerrit.
         
@@ -80,8 +125,12 @@ class GerritIntegration:
             Tuple of (success, change_info, error_message)
         """
         try:
-            # Gerrit REST API endpoint
-            url = f"{self.base_url}/a/changes/{change_id}"
+            # Try authenticated endpoint first
+            if self.is_authenticated():
+                url = f"{self.base_url}/a/changes/{change_id}"
+            else:
+                # Try public endpoint (some Gerrit instances allow this)
+                url = f"{self.base_url}/changes/{change_id}"
             
             response = self.session.get(url, headers={'Accept': 'application/json'})
             
@@ -94,6 +143,20 @@ class GerritIntegration:
                 import json
                 change_info = json.loads(content)
                 return True, change_info, None
+            elif response.status_code == 401:
+                # Try public endpoint if authenticated failed
+                if self.is_authenticated():
+                    public_url = f"{self.base_url}/changes/{change_id}"
+                    public_response = self.session.get(public_url, headers={'Accept': 'application/json'})
+                    if public_response.status_code == 200:
+                        content = public_response.text
+                        if content.startswith(')]}\''):
+                            content = content[4:]
+                        import json
+                        change_info = json.loads(content)
+                        return True, change_info, None
+                
+                return False, None, "Authentication required. Please configure Gerrit credentials."
             else:
                 return False, None, f"HTTP {response.status_code}: {response.text}"
                 
