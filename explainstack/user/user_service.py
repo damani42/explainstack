@@ -101,12 +101,19 @@ class UserService:
         try:
             preferences = self.auth_service.get_user_preferences(user.user_id)
             if not preferences:
+                self.logger.warning(f"No preferences found for user: {user.user_id}")
                 return {}
             
+            openai_key = preferences.get_preference("openai_api_key", "")
+            claude_key = preferences.get_preference("claude_api_key", "")
+            gemini_key = preferences.get_preference("gemini_api_key", "")
+            
+            self.logger.info(f"Retrieved API keys for user {user.user_id}: openai={bool(openai_key)}, claude={bool(claude_key)}, gemini={bool(gemini_key)}")
+            
             return {
-                "openai_api_key": preferences.get_preference("openai_api_key", ""),
-                "claude_api_key": preferences.get_preference("claude_api_key", ""),
-                "gemini_api_key": preferences.get_preference("gemini_api_key", "")
+                "openai_api_key": openai_key,
+                "claude_api_key": claude_key,
+                "gemini_api_key": gemini_key
             }
             
         except Exception as e:

@@ -864,13 +864,16 @@ async def handle_api_config():
     user_email = cl.user_session.get("user_email", "")
     
     if user_logged_in and user_email:
-        # Create a mock user object for the API config UI
-        mock_user = {
-            "email": user_email,
-            "id": f"user_{user_email.replace('@', '_').replace('.', '_')}",
-            "name": user_email.split('@')[0]
-        }
-        await api_config_ui.show_api_configuration(mock_user)
+        # Get the real user object from database
+        try:
+            real_user = auth_service.db.get_user_by_email(user_email)
+            if real_user:
+                await api_config_ui.show_api_configuration(real_user)
+            else:
+                await cl.Message(content="❌ User not found in database. Please login again.").send()
+        except Exception as e:
+            logger.error(f"Failed to get user for API config: {e}")
+            await cl.Message(content="❌ Error accessing user data. Please try again.").send()
     else:
         await cl.Message(content="ℹ️ You need to be logged in to configure API keys. Type `login` to sign in or `register` to create an account.").send()
 

@@ -23,7 +23,7 @@ class AgentConfig:
         """
         self.config = config
         self.agents = {}
-        self._initialize_agents()
+        # Don't initialize agents here - they will be created on demand
     
     def _initialize_agents(self):
         """Initialize all available agents with their backends."""
@@ -74,6 +74,31 @@ class AgentConfig:
         # Create agent with backend
         return agent_class(backend)
     
+    def _create_agent_on_demand(self, agent_id: str):
+        """Create a specific agent on demand with current configuration.
+        
+        Args:
+            agent_id: Agent identifier
+        """
+        # Get backend configurations
+        backends_config = self.config.get("backends", {})
+        
+        # Map agent IDs to their classes
+        agent_classes = {
+            "code_expert": CodeExpertAgent,
+            "patch_reviewer": PatchReviewerAgent,
+            "import_cleaner": ImportCleanerAgent,
+            "commit_writer": CommitWriterAgent,
+            "security_expert": SecurityExpertAgent,
+            "performance_expert": PerformanceExpertAgent
+        }
+        
+        if agent_id in agent_classes:
+            agent_class = agent_classes[agent_id]
+            self.agents[agent_id] = self._create_agent_with_backend(
+                agent_id, agent_class, backends_config
+            )
+    
     def get_agent(self, agent_id: str):
         """Get agent by ID.
         
@@ -83,6 +108,9 @@ class AgentConfig:
         Returns:
             Agent instance or None if not found
         """
+        # Create agent on demand with current configuration
+        if agent_id not in self.agents:
+            self._create_agent_on_demand(agent_id)
         return self.agents.get(agent_id)
     
     def get_all_agents(self) -> Dict[str, Any]:
@@ -91,6 +119,12 @@ class AgentConfig:
         Returns:
             Dictionary of agent information
         """
+        # Create all agents on demand
+        agent_ids = ["code_expert", "patch_reviewer", "import_cleaner", "commit_writer", "security_expert", "performance_expert"]
+        for agent_id in agent_ids:
+            if agent_id not in self.agents:
+                self._create_agent_on_demand(agent_id)
+        
         return {
             agent_id: agent.get_info() 
             for agent_id, agent in self.agents.items()
