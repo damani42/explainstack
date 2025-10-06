@@ -428,14 +428,19 @@ async def main(message: cl.Message):
         user_email = cl.user_session.get("user_email", "")
         
         if user_logged_in and user_email and user_text.lower().startswith(("set ", "test ", "clear ")):
-            # Create a mock user object for the API config UI
-            mock_user = {
-                "email": user_email,
-                "id": f"user_{user_email.replace('@', '_').replace('.', '_')}",
-                "name": user_email.split('@')[0]
-            }
-            handled = await api_config_ui.handle_api_command(mock_user, user_text)
-            if handled:
+            # Get the real user object from database
+            try:
+                real_user = auth_service.db.get_user_by_email(user_email)
+                if real_user:
+                    handled = await api_config_ui.handle_api_command(real_user, user_text)
+                    if handled:
+                        return
+                else:
+                    await cl.Message(content="❌ User not found in database. Please login again.").send()
+                    return
+            except Exception as e:
+                logger.error(f"Failed to get user for API config: {e}")
+                await cl.Message(content="❌ Error accessing user data. Please try again.").send()
                 return
         
         # Check for authentication responses AFTER API commands
@@ -448,8 +453,8 @@ async def main(message: cl.Message):
         
         # Use user-specific configuration if authenticated, otherwise use default
         if user_logged_in and user_email:
-            # Create dynamic config with user's API keys if available
-            dynamic_config = create_dynamic_config(config_data, cl.user_session)
+            # Create dynamic config with user's API keys from database
+            dynamic_config = create_dynamic_config(config_data, user_email)
             agent_config = AgentConfig(dynamic_config)
         else:
             # Use default configuration for non-authenticated users
@@ -512,7 +517,29 @@ async def main(message: cl.Message):
 
 async def handle_login():
     """Handle user login."""
-    # Set auth state to login
+    # Check if user is already logged in
+    user_logged_in = cl.user_session.get("user_logged_in", False)
+    user_email = cl.user_session.get("user_email", "")
+    
+    if user_logged_in and user_email:
+        # User is already logged in
+        await cl.Message(content=f"""✅ **Already Logged In**
+
+You are currently logged in as: **{user_email}**
+
+**What would you like to do?**
+1. **Stay logged in** - Continue with current session
+2. **View profile** - See your account information
+3. **Logout** - Sign out and login with different account
+4. **Switch account** - Login with different credentials
+
+Type the number of your choice (1-4), or type 'cancel' to go back.""").send()
+        
+        # Set auth state to handle login options
+        cl.user_session.set("auth_state", "login_options")
+        return
+    
+    # User is not logged in, proceed with normal login
     cl.user_session.set("auth_state", "login")
     
     await cl.Message(content="""🔐 **Login to ExplainStack**
@@ -546,12 +573,12 @@ def get_gerrit_integration() -> GerritIntegration:
         api_token=api_token
     )
 
-def create_dynamic_config(base_config: dict, session) -> dict:
-    """Create dynamic configuration using user's API keys from session.
+def create_dynamic_config(base_config: dict, user_email: str = None) -> dict:
+    """Create dynamic configuration using user's API keys from database.
     
     Args:
         base_config: Base configuration dictionary
-        session: Chainlit user session
+        user_email: User email to get API keys from database
         
     Returns:
         Updated configuration with user's API keys
@@ -559,28 +586,39 @@ def create_dynamic_config(base_config: dict, session) -> dict:
     # Create a copy of the base config
     dynamic_config = base_config.copy()
     
-    # Get user's API keys from session
-    user_openai_key = session.get("openai_api_key", "")
-    user_claude_key = session.get("claude_api_key", "")
-    user_gemini_key = session.get("gemini_api_key", "")
+    # If no user email, return base config
+    if not user_email:
+        return dynamic_config
     
-    # Update OpenAI backends with user's key if available
-    if user_openai_key:
-        for agent_name, agent_config in dynamic_config["backends"].items():
-            if agent_config["type"] == "openai":
-                agent_config["config"]["api_key"] = user_openai_key
-    
-    # Update Claude backends with user's key if available
-    if user_claude_key:
-        for agent_name, agent_config in dynamic_config["backends"].items():
-            if agent_config["type"] == "claude":
-                agent_config["config"]["api_key"] = user_claude_key
-    
-    # Update Gemini backends with user's key if available
-    if user_gemini_key:
-        for agent_name, agent_config in dynamic_config["backends"].items():
-            if agent_config["type"] == "gemini":
-                agent_config["config"]["api_key"] = user_gemini_key
+    try:
+        # Get user from database
+        user = auth_service.db.get_user_by_email(user_email)
+        if not user:
+            return dynamic_config
+        
+        # Get user's API keys from database
+        user_keys = user_service.get_user_api_keys(user)
+        
+        # Update OpenAI backends with user's key if available
+        if user_keys.get("openai_api_key"):
+            for agent_name, agent_config in dynamic_config["backends"].items():
+                if agent_config["type"] == "openai":
+                    agent_config["config"]["api_key"] = user_keys["openai_api_key"]
+        
+        # Update Claude backends with user's key if available
+        if user_keys.get("claude_api_key"):
+            for agent_name, agent_config in dynamic_config["backends"].items():
+                if agent_config["type"] == "claude":
+                    agent_config["config"]["api_key"] = user_keys["claude_api_key"]
+        
+        # Update Gemini backends with user's key if available
+        if user_keys.get("gemini_api_key"):
+            for agent_name, agent_config in dynamic_config["backends"].items():
+                if agent_config["type"] == "gemini":
+                    agent_config["config"]["api_key"] = user_keys["gemini_api_key"]
+        
+    except Exception as e:
+        logger.error(f"Failed to load user API keys: {e}")
     
     return dynamic_config
 
@@ -630,9 +668,17 @@ async def handle_auth_responses(user_text: str) -> bool:
                     await cl.Message(content="❌ **Password too weak!**\n\nPassword must contain at least one number.\n\nExample: `user@example.com mypassword123`").send()
                     return True
                 
-                # Here you would normally validate and create the user
-                # For now, just show a success message
-                await cl.Message(content=f"""✅ **Registration Successful!**
+                # Create user in database
+                try:
+                    # Register user using AuthService
+                    success, message, user = auth_service.register_user(email, password)
+                    if not success:
+                        await cl.Message(content=f"❌ Failed to create account: {message}").send()
+                        return True
+                    
+                    # Default preferences are created automatically by register_user
+                    
+                    await cl.Message(content=f"""✅ **Registration Successful!**
 
 Welcome to ExplainStack! Your account has been created:
 - Email: {email}
@@ -640,14 +686,57 @@ Welcome to ExplainStack! Your account has been created:
 - Password: {'*' * len(password)} (hidden for security)
 
 You can now configure your API keys by typing `api` or `config`.""").send()
-                
-                # Save user session
-                cl.user_session.set("user_email", email)
-                cl.user_session.set("user_logged_in", True)
-                cl.user_session.set("auth_state", None)
-                return True
+                    
+                    # Save user session
+                    cl.user_session.set("user_email", email)
+                    cl.user_session.set("user_logged_in", True)
+                    cl.user_session.set("auth_state", None)
+                    return True
+                    
+                except Exception as e:
+                    await cl.Message(content=f"❌ Failed to create account: {str(e)}").send()
+                    return True
             else:
                 await cl.Message(content="❌ Please provide both email and password separated by a space.\n\nExample: `user@example.com mypassword`").send()
+                return True
+        
+        elif auth_state == "login_options":
+            # Handle login options for already logged in user
+            if user_text.lower() == "cancel":
+                cl.user_session.set("auth_state", None)
+                await cl.Message(content="❌ Login options cancelled.").send()
+                return True
+            
+            if user_text.strip() == "1":
+                # Stay logged in
+                cl.user_session.set("auth_state", None)
+                await cl.Message(content="✅ **Continuing with current session**\n\nYou're all set! You can now use all features with your current account.").send()
+                return True
+            elif user_text.strip() == "2":
+                # View profile
+                cl.user_session.set("auth_state", None)
+                await handle_profile()
+                return True
+            elif user_text.strip() == "3":
+                # Logout
+                cl.user_session.set("auth_state", None)
+                await handle_logout()
+                return True
+            elif user_text.strip() == "4":
+                # Switch account - proceed with login
+                cl.user_session.set("auth_state", "login")
+                await cl.Message(content="""🔐 **Switch Account**
+
+Please provide your new credentials:
+- Email: [Your email address]
+- Password: [Your password]
+
+Type your email and password separated by a space, or type 'cancel' to go back.
+
+Example: `user@example.com mypassword`""").send()
+                return True
+            else:
+                await cl.Message(content="❌ Please select a valid option (1-4) or type 'cancel'.").send()
                 return True
         
         elif auth_state == "login":
@@ -670,21 +759,34 @@ You can now configure your API keys by typing `api` or `config`.""").send()
                     await cl.Message(content="❌ **Invalid email format!**\n\nPlease provide a valid email address.\n\nExample: `user@example.com mypassword`").send()
                     return True
                 
-                # Here you would normally validate credentials
-                # For now, just show a success message
-                await cl.Message(content=f"""✅ **Login Successful!**
+                # Validate credentials against database
+                try:
+                    user = auth_service.db.get_user_by_email(email)
+                    if not user:
+                        await cl.Message(content="❌ **Login Failed!**\n\nAccount not found. Please check your email or register a new account.").send()
+                        return True
+                    
+                    if not user.verify_password(password):
+                        await cl.Message(content="❌ **Login Failed!**\n\nInvalid password. Please try again.").send()
+                        return True
+                    
+                    await cl.Message(content=f"""✅ **Login Successful!**
 
 Welcome back to ExplainStack!
 - Email: {email}
 - Status: Logged in
 
 You can now access your personal settings and API configurations.""").send()
-                
-                # Save user session
-                cl.user_session.set("user_email", email)
-                cl.user_session.set("user_logged_in", True)
-                cl.user_session.set("auth_state", None)
-                return True
+                    
+                    # Save user session
+                    cl.user_session.set("user_email", email)
+                    cl.user_session.set("user_logged_in", True)
+                    cl.user_session.set("auth_state", None)
+                    return True
+                    
+                except Exception as e:
+                    await cl.Message(content=f"❌ Login failed: {str(e)}").send()
+                    return True
             else:
                 await cl.Message(content="❌ Please provide both email and password separated by a space.\n\nExample: `user@example.com mypassword`").send()
                 return True

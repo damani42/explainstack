@@ -27,12 +27,8 @@ class APIConfigUI:
         Args:
             user: Current user instance
         """
-        # Get current API keys from session
-        current_keys = {
-            "openai_api_key": cl.user_session.get("openai_api_key", ""),
-            "claude_api_key": cl.user_session.get("claude_api_key", ""),
-            "gemini_api_key": cl.user_session.get("gemini_api_key", "")
-        }
+        # Get current API keys from database
+        current_keys = self.user_service.get_user_api_keys(user)
         
         config_text = f"""🔑 **API Key Configuration**
 
@@ -118,24 +114,25 @@ Ready to configure your API keys? Type a command above."""
                 await cl.Message(content=f"❌ Invalid {key_type} API key format.").send()
                 return True
             
-            # Get current API keys from session
-            current_keys = {
-                "openai_api_key": cl.user_session.get("openai_api_key", ""),
-                "claude_api_key": cl.user_session.get("claude_api_key", ""),
-                "gemini_api_key": cl.user_session.get("gemini_api_key", "")
-            }
+            # Get current API keys from database
+            current_keys = self.user_service.get_user_api_keys(user)
             
-            # Save API keys to session (simplified approach)
+            # Save API keys to database
             try:
-                # Store API keys in session for this demo
-                cl.user_session.set(f"{key_type}_api_key", api_key)
-                cl.user_session.set("api_keys_configured", True)
+                # Update API keys in database
+                new_keys = current_keys.copy()
+                new_keys[f"{key_type}_api_key"] = api_key
                 
-                await cl.Message(content=f"✅ {key_type.title()} API key configured successfully!").send()
+                success = self.user_service.update_user_api_keys(user, new_keys)
                 
-                # Test the key if it's new
-                if not current_keys.get(f"{key_type}_api_key"):
-                    await self._test_single_key(user, key_type, api_key)
+                if success:
+                    await cl.Message(content=f"✅ {key_type.title()} API key configured successfully!").send()
+                    
+                    # Test the key if it's new
+                    if not current_keys.get(f"{key_type}_api_key"):
+                        await self._test_single_key(user, key_type, api_key)
+                else:
+                    await cl.Message(content=f"❌ Failed to save {key_type} API key to database.").send()
             except Exception as e:
                 await cl.Message(content=f"❌ Failed to save {key_type} API key: {str(e)}").send()
             
@@ -155,11 +152,7 @@ Ready to configure your API keys? Type a command above."""
             True if command was handled
         """
         try:
-            current_keys = {
-                "openai_api_key": cl.user_session.get("openai_api_key", ""),
-                "claude_api_key": cl.user_session.get("claude_api_key", ""),
-                "gemini_api_key": cl.user_session.get("gemini_api_key", "")
-            }
+            current_keys = self.user_service.get_user_api_keys(user)
             
             if not any(current_keys.values()):
                 await cl.Message(content="ℹ️ No API keys configured. Use `set <type> <key>` to configure keys.").send()
@@ -229,13 +222,19 @@ Ready to configure your API keys? Type a command above."""
             True if command was handled
         """
         try:
-            # Clear all API keys from session
-            cl.user_session.set("openai_api_key", "")
-            cl.user_session.set("claude_api_key", "")
-            cl.user_session.set("gemini_api_key", "")
-            cl.user_session.set("api_keys_configured", False)
+            # Clear all API keys from database
+            empty_keys = {
+                "openai_api_key": "",
+                "claude_api_key": "",
+                "gemini_api_key": ""
+            }
             
-            await cl.Message(content="✅ All API keys cleared. You'll use global configuration.").send()
+            success = self.user_service.update_user_api_keys(user, empty_keys)
+            
+            if success:
+                await cl.Message(content="✅ All API keys cleared. You'll use global configuration.").send()
+            else:
+                await cl.Message(content="❌ Failed to clear API keys from database.").send()
             
             return True
             

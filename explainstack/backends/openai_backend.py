@@ -1,6 +1,6 @@
 """OpenAI backend for ExplainStack multi-agent system."""
 
-import openai
+from openai import OpenAI
 from typing import Dict, Any, Optional, Tuple
 from .base_backend import BaseBackend
 
@@ -30,8 +30,9 @@ class OpenAIBackend(BaseBackend):
         if api_key == "demo-key" or not api_key:
             self.logger.warning("OpenAI API key not set - running in demo mode")
             self.demo_mode = True
+            self.client = None
         else:
-            openai.api_key = api_key
+            self.client = OpenAI(api_key=api_key)
             self.demo_mode = False
         self.logger.info(f"OpenAI backend initialized with model: {self.config['model']}")
     
@@ -68,7 +69,7 @@ class OpenAIBackend(BaseBackend):
                 **kwargs
             }
             
-            response = openai.ChatCompletion.create(
+            response = self.client.chat.completions.create(
                 messages=[
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_prompt}
@@ -76,33 +77,29 @@ class OpenAIBackend(BaseBackend):
                 **request_config
             )
             
-            result = response.choices[0].message["content"]
+            result = response.choices[0].message.content
             self.logger.info("OpenAI response generated successfully")
             return True, result, None
             
-        except openai.RateLimitError as e:
-            error_msg = "OpenAI rate limit exceeded. Please try again in a few minutes."
-            self.logger.warning(f"OpenAI rate limit error: {e}")
-            return False, None, error_msg
-            
-        except openai.BadRequestError as e:
-            error_msg = "OpenAI invalid request. Please check your input."
-            self.logger.warning(f"OpenAI invalid request error: {e}")
-            return False, None, error_msg
-            
-        except openai.AuthenticationError as e:
-            error_msg = "OpenAI authentication error. Please check your API key."
-            self.logger.error(f"OpenAI authentication error: {e}")
-            return False, None, error_msg
-            
-        except openai.APIConnectionError as e:
-            error_msg = "OpenAI API connection error. Please check your internet connection."
-            self.logger.error(f"OpenAI API connection error: {e}")
-            return False, None, error_msg
-            
         except Exception as e:
-            error_msg = f"OpenAI unexpected error: {str(e)}"
-            self.logger.error(f"OpenAI unexpected error: {e}")
+            # Handle OpenAI API errors
+            error_type = type(e).__name__
+            if "RateLimitError" in error_type or "rate_limit" in str(e).lower():
+                error_msg = "OpenAI rate limit exceeded. Please try again in a few minutes."
+                self.logger.warning(f"OpenAI rate limit error: {e}")
+            elif "BadRequestError" in error_type or "invalid_request" in str(e).lower():
+                error_msg = "OpenAI invalid request. Please check your input."
+                self.logger.warning(f"OpenAI invalid request error: {e}")
+            elif "AuthenticationError" in error_type or "authentication" in str(e).lower():
+                error_msg = "OpenAI authentication error. Please check your API key."
+                self.logger.error(f"OpenAI authentication error: {e}")
+            elif "APIConnectionError" in error_type or "connection" in str(e).lower():
+                error_msg = "OpenAI API connection error. Please check your internet connection."
+                self.logger.error(f"OpenAI API connection error: {e}")
+            else:
+                error_msg = f"OpenAI unexpected error: {str(e)}"
+                self.logger.error(f"OpenAI unexpected error: {e}")
+            
             return False, None, error_msg
     
     def get_model_info(self) -> Dict[str, Any]:

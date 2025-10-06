@@ -149,9 +149,12 @@ class AuthService:
             Tuple of (success, message)
         """
         try:
-            self.db.update_user_preferences(user_id, preferences)
-            self.logger.info(f"Preferences updated for user: {user_id}")
-            return True, "Preferences updated successfully"
+            success, message = self.db.update_user_preferences(user_id, preferences)
+            if success:
+                self.logger.info(f"Preferences updated for user: {user_id}")
+            else:
+                self.logger.error(f"Failed to update preferences: {message}")
+            return success, message
             
         except Exception as e:
             self.logger.error(f"Failed to update preferences: {e}")

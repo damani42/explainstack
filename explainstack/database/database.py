@@ -1,8 +1,9 @@
 """Database manager for ExplainStack user system."""
 
 import sqlite3
+import json
 import logging
-from typing import Optional, List
+from typing import Optional, List, Tuple
 from datetime import datetime
 from .models import User, UserSession, UserPreferences
 
@@ -103,7 +104,7 @@ class DatabaseManager:
                     VALUES (?, ?)
                 """, (
                     preferences.user_id,
-                    preferences.to_dict()['preferences']
+                    json.dumps(preferences.to_dict()['preferences'])
                 ))
                 
                 conn.commit()
@@ -301,12 +302,15 @@ class DatabaseManager:
             self.logger.error(f"Failed to get user preferences: {e}")
             return None
     
-    def update_user_preferences(self, user_id: str, preferences: UserPreferences):
+    def update_user_preferences(self, user_id: str, preferences: UserPreferences) -> Tuple[bool, str]:
         """Update user preferences.
         
         Args:
             user_id: User ID
             preferences: UserPreferences instance
+            
+        Returns:
+            Tuple of (success, message)
         """
         try:
             with sqlite3.connect(self.db_path) as conn:
@@ -317,9 +321,13 @@ class DatabaseManager:
                     WHERE user_id = ?
                 """, (json.dumps(preferences.preferences), user_id))
                 
+                if cursor.rowcount == 0:
+                    return False, "User preferences not found"
+                
                 conn.commit()
                 self.logger.info(f"Preferences updated for user: {user_id}")
+                return True, "Preferences updated successfully"
                 
         except Exception as e:
             self.logger.error(f"Failed to update preferences: {e}")
-            raise
+            return False, f"Failed to update preferences: {str(e)}"

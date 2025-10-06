@@ -3,7 +3,7 @@ import logging
 from typing import Optional
 
 import chainlit as cl
-import openai
+from openai import OpenAI
 from dotenv import load_dotenv
 
 from .prompts import (
@@ -35,7 +35,7 @@ def setup_openai():
         if not api_key:
             raise ValueError("OPENAI_API_KEY is not set")
         
-        openai.api_key = api_key
+        client = OpenAI(api_key=api_key)
         logger.info("OpenAI API configured successfully")
         return True
     except Exception as e:
@@ -85,7 +85,7 @@ async def call_openai_api(prompt: str) -> tuple[bool, Optional[str], Optional[st
     try:
         logger.info("Calling OpenAI API...")
         openai_config = config["openai"]
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model=openai_config["model"],
             messages=[
                 {"role": "system", "content": "You are an OpenStack expert who explains Python code clearly and professionally."},
@@ -95,33 +95,28 @@ async def call_openai_api(prompt: str) -> tuple[bool, Optional[str], Optional[st
             max_tokens=openai_config["max_tokens"],
         )
         
-        explanation = response.choices[0].message["content"]
+        explanation = response.choices[0].message.content
         logger.info("OpenAI API call successful")
         return True, explanation, None
         
-    except openai.RateLimitError as e:
-        error_msg = "Rate limit exceeded. Please try again in a few minutes."
-        logger.warning(f"Rate limit error: {e}")
-        return False, None, error_msg
-        
-    except openai.BadRequestError as e:
-        error_msg = "Invalid request. Please check your code or patch."
-        logger.warning(f"Invalid request error: {e}")
-        return False, None, error_msg
-        
-    except openai.AuthenticationError as e:
-        error_msg = "Authentication error. Please check your OpenAI API key."
-        logger.error(f"Authentication error: {e}")
-        return False, None, error_msg
-        
-    except openai.APIConnectionError as e:
-        error_msg = "API connection error. Please check your internet connection."
-        logger.error(f"API connection error: {e}")
-        return False, None, error_msg
-        
     except Exception as e:
-        error_msg = f"Unexpected error: {str(e)}"
-        logger.error(f"Unexpected error: {e}")
+        # Handle OpenAI API errors
+        if "rate_limit" in str(e).lower():
+            error_msg = "Rate limit exceeded. Please try again in a few minutes."
+            logger.warning(f"Rate limit error: {e}")
+        elif "invalid_request" in str(e).lower() or "bad_request" in str(e).lower():
+            error_msg = "Invalid request. Please check your code or patch."
+            logger.warning(f"Invalid request error: {e}")
+        elif "authentication" in str(e).lower():
+            error_msg = "Authentication error. Please check your OpenAI API key."
+            logger.error(f"Authentication error: {e}")
+        elif "connection" in str(e).lower():
+            error_msg = "API connection error. Please check your internet connection."
+            logger.error(f"API connection error: {e}")
+        else:
+            error_msg = f"Unexpected error: {str(e)}"
+            logger.error(f"Unexpected error: {e}")
+        
         return False, None, error_msg
 
 @cl.on_message

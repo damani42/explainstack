@@ -27,21 +27,32 @@ class GerritIntegration:
         self.api_token = api_token
         self.session = requests.Session()
         
-        # Configure authentication
+        # Configure authentication (but don't force it for public endpoints)
+        self.has_auth = False
         if api_token:
-            # Use API token authentication for Gerrit
-            # For Gerrit, we need to use the token as username with empty password
-            # or use it in the Authorization header
-            self.session.auth = (api_token, '')
+            self.has_auth = True
+            # Store token for later use if needed
+            self._stored_token = api_token
         elif username and password:
-            # Use basic authentication
-            self.session.auth = (username, password)
+            self.has_auth = True
+            # Store credentials for later use if needed
+            self._stored_username = username
+            self._stored_password = password
         
         # Set default headers for Gerrit API
         self.session.headers.update({
             'Accept': 'application/json',
             'User-Agent': 'ExplainStack/1.0'
         })
+    
+    def _apply_auth(self):
+        """Apply authentication to the session if available."""
+        if hasattr(self, '_stored_token') and self._stored_token:
+            # Try token as username with empty password
+            self.session.auth = (self._stored_token, '')
+        elif hasattr(self, '_stored_username') and hasattr(self, '_stored_password'):
+            # Use username/password
+            self.session.auth = (self._stored_username, self._stored_password)
     
     def parse_gerrit_url(self, url: str) -> Optional[Dict[str, str]]:
         """Parse Gerrit URL to extract change information.
@@ -174,15 +185,25 @@ class GerritIntegration:
             Tuple of (success, diff_content, error_message)
         """
         try:
-            # Gerrit REST API endpoint for diff
-            url = f"{self.base_url}/a/changes/{change_id}/revisions/current/patch"
-            
-            response = self.session.get(url, headers={'Accept': 'text/plain'})
+            # Try public endpoint first (no authentication required)
+            public_url = f"{self.base_url}/c/changes/{change_id}/revisions/current/patch"
+            response = self.session.get(public_url, headers={'Accept': 'text/plain'})
             
             if response.status_code == 200:
                 return True, response.text, None
+            
+            # If public endpoint fails and we have auth, try authenticated endpoint
+            if self.has_auth:
+                self._apply_auth()
+                auth_url = f"{self.base_url}/a/changes/{change_id}/revisions/current/patch"
+                response = self.session.get(auth_url, headers={'Accept': 'text/plain'})
+                
+                if response.status_code == 200:
+                    return True, response.text, None
+                else:
+                    return False, None, f"HTTP {response.status_code}: {response.text}"
             else:
-                return False, None, f"HTTP {response.status_code}: {response.text}"
+                return False, None, f"HTTP {response.status_code}: {response.text} (Authentication may be required)"
                 
         except Exception as e:
             logger.error(f"Error getting diff for {change_id}: {e}")
