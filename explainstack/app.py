@@ -343,7 +343,24 @@ async def handle_analytics():
 async def handle_gerrit_config():
     """Handle Gerrit configuration."""
     try:
-        await gerrit_config_ui.show_config_ui()
+        # Check if user is logged in
+        user_logged_in = cl.user_session.get("user_logged_in", False)
+        user_email = cl.user_session.get("user_email", "")
+        
+        if user_logged_in and user_email:
+            # Get the real user object from database
+            try:
+                real_user = auth_service.db.get_user_by_email(user_email)
+                if real_user:
+                    await gerrit_config_ui.show_config_ui(real_user)
+                else:
+                    await cl.Message(content="❌ User not found in database. Please login again.").send()
+            except Exception as e:
+                logger.error(f"Failed to get user for Gerrit config: {e}")
+                await cl.Message(content="❌ Error accessing user data. Please try again.").send()
+        else:
+            # Show config UI without user (session-based)
+            await gerrit_config_ui.show_config_ui()
     except Exception as e:
         logger.error(f"Error handling Gerrit config: {e}")
         await cl.Message(content="❌ Error loading Gerrit configuration. Please try again.").send()
@@ -448,7 +465,15 @@ async def main(message: cl.Message):
             return
         
         # Check for Gerrit configuration responses (after command detection)
-        if await gerrit_config_ui.handle_gerrit_input(user_text):
+        if user_logged_in and user_email:
+            # Get the real user object for Gerrit config
+            try:
+                real_user = auth_service.db.get_user_by_email(user_email)
+                if real_user and await gerrit_config_ui.handle_gerrit_input(user_text, real_user):
+                    return
+            except Exception as e:
+                logger.error(f"Failed to get user for Gerrit config: {e}")
+        elif await gerrit_config_ui.handle_gerrit_input(user_text):
             return
         
         # Use user-specific configuration if authenticated, otherwise use default

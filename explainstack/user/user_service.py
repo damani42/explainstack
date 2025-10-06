@@ -157,6 +157,68 @@ class UserService:
             self.logger.error(f"Failed to update user API keys: {e}")
             return False
     
+    def get_user_gerrit_config(self, user: User) -> Dict[str, str]:
+        """Get user Gerrit configuration.
+        
+        Args:
+            user: User instance
+            
+        Returns:
+            Dictionary of Gerrit configuration
+        """
+        try:
+            preferences = self.auth_service.get_user_preferences(user.user_id)
+            if not preferences:
+                return {}
+            
+            return {
+                "gerrit_base_url": preferences.get_preference("gerrit_base_url", ""),
+                "gerrit_username": preferences.get_preference("gerrit_username", ""),
+                "gerrit_password": preferences.get_preference("gerrit_password", ""),
+                "gerrit_api_token": preferences.get_preference("gerrit_api_token", "")
+            }
+            
+        except Exception as e:
+            self.logger.error(f"Failed to get user Gerrit config: {e}")
+            return {}
+    
+    def update_user_gerrit_config(self, user: User, gerrit_config: Dict[str, str]) -> bool:
+        """Update user Gerrit configuration.
+        
+        Args:
+            user: User instance
+            gerrit_config: Dictionary of Gerrit configuration
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            # Get current preferences
+            current_preferences = self.auth_service.get_user_preferences(user.user_id)
+            if not current_preferences:
+                current_preferences = UserPreferences.create_default(user.user_id)
+            
+            # Update Gerrit configuration
+            for key, value in gerrit_config.items():
+                if key in ["gerrit_base_url", "gerrit_username", "gerrit_password", "gerrit_api_token"]:
+                    current_preferences.set_preference(key, value)
+            
+            # Save to database
+            success, message = self.auth_service.update_user_preferences(
+                user.user_id, current_preferences
+            )
+            
+            if success:
+                self.logger.info(f"Gerrit config updated for user: {user.user_id}")
+                return True
+            else:
+                self.logger.error(f"Failed to update Gerrit config: {message}")
+                return False
+                
+        except Exception as e:
+            self.logger.error(f"Failed to update user Gerrit config: {e}")
+            return False
+    
     def _get_user_stats(self, user: User) -> Dict[str, Any]:
         """Get user statistics.
         

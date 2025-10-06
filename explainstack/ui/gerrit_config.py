@@ -3,6 +3,9 @@
 import chainlit as cl
 from typing import Optional, Dict, Any
 import logging
+from ..user.user_service import UserService
+from ..auth.auth_service import AuthService
+from ..database.database import DatabaseManager
 
 logger = logging.getLogger(__name__)
 
@@ -12,20 +15,36 @@ class GerritConfigUI:
     
     def __init__(self):
         self.config_key = "gerrit_config"
+        # Initialize services for database operations
+        self.db_manager = DatabaseManager()
+        self.auth_service = AuthService(self.db_manager)
+        self.user_service = UserService(self.auth_service)
     
-    async def show_config_ui(self):
+    async def show_config_ui(self, user=None):
         """Show Gerrit configuration interface."""
         try:
-            # Get current configuration
-            current_config = cl.user_session.get(self.config_key, {})
+            # Get current configuration from database if user is provided
+            if user:
+                current_config = self.user_service.get_user_gerrit_config(user)
+                base_url = current_config.get('gerrit_base_url', 'https://review.opendev.org')
+                username = current_config.get('gerrit_username', 'Not set')
+                api_token = current_config.get('gerrit_api_token', '')
+                auth_configured = bool(username != 'Not set' or api_token)
+            else:
+                # Fallback to session for non-authenticated users
+                current_config = cl.user_session.get(self.config_key, {})
+                base_url = current_config.get('base_url', 'https://review.opendev.org')
+                username = current_config.get('username', 'Not set')
+                api_token = current_config.get('api_token', '')
+                auth_configured = bool(current_config.get('username') or current_config.get('api_token'))
             
             config_message = f"""🔧 **Gerrit Configuration**
 
 **Current Settings:**
-- **Base URL**: {current_config.get('base_url', 'https://review.opendev.org')}
-- **Authentication**: {'✅ Configured' if current_config.get('username') or current_config.get('api_token') else '❌ Not configured'}
-- **Username**: {current_config.get('username', 'Not set')}
-- **API Token**: {'✅ Set' if current_config.get('api_token') else '❌ Not set'}
+- **Base URL**: {base_url}
+- **Authentication**: {'✅ Configured' if auth_configured else '❌ Not configured'}
+- **Username**: {username}
+- **API Token**: {'✅ Set' if api_token else '❌ Not set'}
 
 **Configuration Options:**
 1. **Set Base URL** - Configure Gerrit server URL
@@ -44,24 +63,27 @@ Type the number of the option you want to configure, or type 'back' to return to
             logger.error(f"Error showing Gerrit config UI: {e}")
             await cl.Message(content="❌ Error loading Gerrit configuration. Please try again.").send()
     
-    async def handle_config_option(self, option: str) -> bool:
+    async def handle_config_option(self, option: str, user=None) -> bool:
         """Handle Gerrit configuration option.
         
         Args:
             option: Selected configuration option
+            user: User object for database operations
             
         Returns:
             True if configuration was updated, False otherwise
         """
         try:
             current_config = cl.user_session.get(self.config_key, {})
+            if user:
+                current_config["_user"] = user  # Store user for database operations
             
             if option == "1":
-                await self._configure_base_url(current_config)
+                await self._configure_base_url(current_config, user)
             elif option == "2":
-                await self._configure_username_password(current_config)
+                await self._configure_username_password(current_config, user)
             elif option == "3":
-                await self._configure_api_token(current_config)
+                await self._configure_api_token(current_config, user)
             elif option == "4":
                 await self._test_connection(current_config)
             elif option == "5":
@@ -77,10 +99,12 @@ Type the number of the option you want to configure, or type 'back' to return to
             await cl.Message(content="❌ Error processing configuration. Please try again.").send()
             return False
     
-    async def _configure_base_url(self, current_config: Dict[str, Any]):
+    async def _configure_base_url(self, current_config: Dict[str, Any], user=None):
         """Configure Gerrit base URL."""
         # Set pending state for base URL input
         current_config["_pending"] = "base_url"
+        if user:
+            current_config["_user"] = user  # Store user for database operations
         cl.user_session.set(self.config_key, current_config)
         
         await cl.Message(content="""🌐 **Configure Gerrit Base URL**
@@ -166,17 +190,20 @@ Enter your API token or type 'cancel' to go back.""").send()
         cl.user_session.set(self.config_key, {})
         await cl.Message(content="🗑️ **Configuration Cleared**\n\nAll Gerrit settings have been reset.").send()
     
-    async def handle_gerrit_input(self, input_text: str) -> bool:
+    async def handle_gerrit_input(self, input_text: str, user=None) -> bool:
         """Handle Gerrit configuration input.
         
         Args:
             input_text: User input text
+            user: User object for database operations
             
         Returns:
             True if input was handled, False otherwise
         """
         try:
             current_config = cl.user_session.get(self.config_key, {})
+            if user:
+                current_config["_user"] = user  # Store user for database operations
             
             # Check if we're in a configuration flow
             if "base_url" in current_config.get("_pending", ""):
@@ -194,7 +221,7 @@ Enter your API token or type 'cancel' to go back.""").send()
             
             # Check if it's a numeric option selection
             if input_text.strip() in ["1", "2", "3", "4", "5"]:
-                await self.handle_config_option(input_text.strip())
+                await self.handle_config_option(input_text.strip(), user)
                 return True
             
             return False
@@ -214,8 +241,26 @@ Enter your API token or type 'cancel' to go back.""").send()
             if input_text.startswith(('http://', 'https://')):
                 current_config['base_url'] = input_text
                 current_config.pop("_pending", None)
+                
+                # Save to database if user is available
+                user = current_config.get("_user")
+                if user:
+                    try:
+                        gerrit_config = {
+                            "gerrit_base_url": input_text
+                        }
+                        success = self.user_service.update_user_gerrit_config(user, gerrit_config)
+                        if success:
+                            await cl.Message(content=f"✅ **Base URL Set and Saved**\n\nGerrit server: {input_text}").send()
+                        else:
+                            await cl.Message(content=f"✅ **Base URL Set**\n\nGerrit server: {input_text}\n⚠️ Failed to save to database.").send()
+                    except Exception as e:
+                        logger.error(f"Failed to save Gerrit config: {e}")
+                        await cl.Message(content=f"✅ **Base URL Set**\n\nGerrit server: {input_text}\n⚠️ Failed to save to database.").send()
+                else:
+                    await cl.Message(content=f"✅ **Base URL Set**\n\nGerrit server: {input_text}").send()
+                
                 cl.user_session.set(self.config_key, current_config)
-                await cl.Message(content=f"✅ **Base URL Set**\n\nGerrit server: {input_text}").send()
                 await self.show_config_ui()
             else:
                 await cl.Message(content="❌ **Invalid URL**\n\nPlease enter a valid URL starting with http:// or https://").send()

@@ -138,6 +138,10 @@ class UserPreferences:
             'openai_api_key': '',
             'claude_api_key': '',
             'gemini_api_key': '',
+            'gerrit_base_url': '',
+            'gerrit_username': '',
+            'gerrit_password': '',
+            'gerrit_api_token': '',
             'preferred_models': {
                 'code_expert': 'gpt-4',
                 'patch_reviewer': 'claude-3-sonnet-20240229',
