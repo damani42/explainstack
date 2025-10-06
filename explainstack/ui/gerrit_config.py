@@ -6,6 +6,7 @@ import logging
 from ..user.user_service import UserService
 from ..auth.auth_service import AuthService
 from ..database.database import DatabaseManager
+from ..integrations.gerrit import GerritIntegration
 
 logger = logging.getLogger(__name__)
 
@@ -118,10 +119,12 @@ Please enter the Gerrit server URL (e.g., https://review.opendev.org):
 
 Enter the URL or type 'cancel' to go back.""").send()
     
-    async def _configure_username_password(self, current_config: Dict[str, Any]):
+    async def _configure_username_password(self, current_config: Dict[str, Any], user=None):
         """Configure username and password authentication."""
         # Set pending state for username input
         current_config["_pending"] = "username"
+        if user:
+            current_config["_user"] = user  # Store user for database operations
         cl.user_session.set(self.config_key, current_config)
         
         await cl.Message(content="""🔐 **Configure Username/Password Authentication**
@@ -135,10 +138,12 @@ Please enter your Gerrit credentials:
 
 Enter your username or type 'cancel' to go back.""").send()
     
-    async def _configure_api_token(self, current_config: Dict[str, Any]):
+    async def _configure_api_token(self, current_config: Dict[str, Any], user=None):
         """Configure API token authentication."""
         # Set pending state for API token input
         current_config["_pending"] = "api_token"
+        if user:
+            current_config["_user"] = user  # Store user for database operations
         cl.user_session.set(self.config_key, current_config)
         
         await cl.Message(content="""🔑 **Configure API Token Authentication**
@@ -286,8 +291,27 @@ Enter your API token or type 'cancel' to go back.""").send()
         else:
             current_config['password'] = input_text
             current_config.pop("_pending", None)
+            
+            # Save to database if user is available
+            user = current_config.get("_user")
+            if user:
+                try:
+                    gerrit_config = {
+                        "gerrit_username": current_config.get('username', ''),
+                        "gerrit_password": input_text
+                    }
+                    success = self.user_service.update_user_gerrit_config(user, gerrit_config)
+                    if success:
+                        await cl.Message(content="✅ **Password Set and Saved**\n\nUsername/Password authentication configured and saved to database.").send()
+                    else:
+                        await cl.Message(content="✅ **Password Set**\n\nUsername/Password authentication configured.\n⚠️ Failed to save to database.").send()
+                except Exception as e:
+                    logger.error(f"Failed to save Gerrit config: {e}")
+                    await cl.Message(content="✅ **Password Set**\n\nUsername/Password authentication configured.\n⚠️ Failed to save to database.").send()
+            else:
+                await cl.Message(content="✅ **Password Set**\n\nUsername/Password authentication configured.").send()
+            
             cl.user_session.set(self.config_key, current_config)
-            await cl.Message(content="✅ **Password Set**\n\nUsername/Password authentication configured.").send()
             await self.show_config_ui()
     
     async def _handle_api_token_input(self, input_text: str, current_config: Dict[str, Any]):
@@ -299,8 +323,26 @@ Enter your API token or type 'cancel' to go back.""").send()
         else:
             current_config['api_token'] = input_text
             current_config.pop("_pending", None)
+            
+            # Save to database if user is available
+            user = current_config.get("_user")
+            if user:
+                try:
+                    gerrit_config = {
+                        "gerrit_api_token": input_text
+                    }
+                    success = self.user_service.update_user_gerrit_config(user, gerrit_config)
+                    if success:
+                        await cl.Message(content="✅ **API Token Set and Saved**\n\nToken-based authentication configured and saved to database.").send()
+                    else:
+                        await cl.Message(content="✅ **API Token Set**\n\nToken-based authentication configured.\n⚠️ Failed to save to database.").send()
+                except Exception as e:
+                    logger.error(f"Failed to save Gerrit config: {e}")
+                    await cl.Message(content="✅ **API Token Set**\n\nToken-based authentication configured.\n⚠️ Failed to save to database.").send()
+            else:
+                await cl.Message(content="✅ **API Token Set**\n\nToken-based authentication configured.").send()
+            
             cl.user_session.set(self.config_key, current_config)
-            await cl.Message(content="✅ **API Token Set**\n\nToken-based authentication configured.").send()
             await self.show_config_ui()
     
     def get_gerrit_integration(self) -> 'GerritIntegration':

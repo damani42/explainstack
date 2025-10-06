@@ -185,21 +185,35 @@ class GerritIntegration:
             Tuple of (success, diff_content, error_message)
         """
         try:
+            import base64
+            
             # Try public endpoint first (no authentication required)
-            public_url = f"{self.base_url}/c/changes/{change_id}/revisions/current/patch"
-            response = self.session.get(public_url, headers={'Accept': 'text/plain'})
+            public_url = f"{self.base_url}/changes/{change_id}/revisions/current/patch"
+            response = self.session.get(public_url)
             
             if response.status_code == 200:
-                return True, response.text, None
+                # Gerrit returns base64-encoded patch
+                try:
+                    decoded_patch = base64.b64decode(response.text).decode('utf-8')
+                    return True, decoded_patch, None
+                except Exception as e:
+                    logger.error(f"Failed to decode patch: {e}")
+                    return False, None, f"Failed to decode patch: {str(e)}"
             
             # If public endpoint fails and we have auth, try authenticated endpoint
             if self.has_auth:
                 self._apply_auth()
                 auth_url = f"{self.base_url}/a/changes/{change_id}/revisions/current/patch"
-                response = self.session.get(auth_url, headers={'Accept': 'text/plain'})
+                response = self.session.get(auth_url)
                 
                 if response.status_code == 200:
-                    return True, response.text, None
+                    # Gerrit returns base64-encoded patch
+                    try:
+                        decoded_patch = base64.b64decode(response.text).decode('utf-8')
+                        return True, decoded_patch, None
+                    except Exception as e:
+                        logger.error(f"Failed to decode patch: {e}")
+                        return False, None, f"Failed to decode patch: {str(e)}"
                 else:
                     return False, None, f"HTTP {response.status_code}: {response.text}"
             else:
